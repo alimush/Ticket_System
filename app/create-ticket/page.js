@@ -505,59 +505,74 @@ const [doneAt, setDoneAt] = useState(null);
               
             </div>
             <div className="border rounded-lg p-3">
-              
   <h3 className="text-xs text-gray-500 mb-2">Paid</h3>
-  <div className="flex gap-3">
-    <button
-      onClick={async () => {
-        const res = await fetch(`/api/tickets/${selectedTicket._id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ paid: "yes" }),
-        });
-        if (res.ok) {
-          const updated = await res.json();
-          setSelectedTicket(updated);
-          setTickets((prev) =>
-            prev.map((t) => (t._id === updated._id ? updated : t))
-          );
-        }
-      }}
-      className={`px-4 py-2 rounded-lg font-medium transition ${
-        selectedTicket.paid === "yes"
-          ? "bg-green-600 text-white"
-          : "bg-gray-200 text-gray-800 hover:bg-gray-300"
-      }`}
-    >
-      Yes
-    </button>
 
-    <button
-      onClick={async () => {
-        const res = await fetch(`/api/tickets/${selectedTicket._id}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ paid: "no" }),
-        });
-        if (res.ok) {
-          const updated = await res.json();
-          setSelectedTicket(updated);
-          setTickets((prev) =>
-            prev.map((t) => (t._id === updated._id ? updated : t))
-          );
-        }
-      }}
-      className={`px-4 py-2 rounded-lg font-medium transition ${
-        selectedTicket.paid === "no"
-          ? "bg-red-600 text-white"
-          : "bg-gray-200 text-gray-800 hover:bg-gray-300"
-      }`}
-    >
-      No
-    </button>
-  </div>
+  {currentUser?.role === "admin" ? (
+    // 👇 الأزرار تظهر بس للـ admin
+    <div className="flex gap-3">
+      <button
+        onClick={async () => {
+          const res = await fetch(`/api/tickets/${selectedTicket._id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paid: "yes" }),
+          });
+          if (res.ok) {
+            const updated = await res.json();
+            setSelectedTicket(updated);
+            setTickets((prev) =>
+              prev.map((t) => (t._id === updated._id ? updated : t))
+            );
+          }
+        }}
+        className={`px-4 py-2 rounded-lg font-medium transition ${
+          selectedTicket.paid === "yes"
+            ? "bg-green-600 text-white"
+            : "bg-gray-200 text-gray-800 hover:bg-gray-300"
+        }`}
+      >
+        Yes
+      </button>
+
+      <button
+        onClick={async () => {
+          const res = await fetch(`/api/tickets/${selectedTicket._id}`, {
+            method: "PATCH",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ paid: "no" }),
+          });
+          if (res.ok) {
+            const updated = await res.json();
+            setSelectedTicket(updated);
+            setTickets((prev) =>
+              prev.map((t) => (t._id === updated._id ? updated : t))
+            );
+          }
+        }}
+        className={`px-4 py-2 rounded-lg font-medium transition ${
+          selectedTicket.paid === "no"
+            ? "bg-red-600 text-white"
+            : "bg-gray-200 text-gray-800 hover:bg-gray-300"
+        }`}
+      >
+        No
+      </button>
+    </div>
+  ) : (
+    // 👇 باقي اليوزرية يشوفون Badge بس
+    <p className="font-medium">
+      {selectedTicket.paid === "yes" ? (
+        <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
+          Yes
+        </span>
+      ) : (
+        <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">
+          No
+        </span>
+      )}
+    </p>
+  )}
 </div>
-            
             
 
             <div className="flex justify-end gap-2 px-6 py-3 border-t bg-gray-50">
