@@ -763,26 +763,28 @@ const [editForm, setEditForm] = useState({});
                   Mark as Done
                 </button>
               )}
-            <button
-              onClick={() => {
-                setEditForm({
-                  title: selectedTicket.title || "",
-                  description: selectedTicket.description || "",
-                  assignedTo: selectedTicket.assignedTo || "",
-                  priority: selectedTicket.priority || "medium",
-                  dueDate: selectedTicket.dueDate
-                    ? selectedTicket.dueDate.slice(0, 10)
-                    : "",
-                  company: selectedTicket.company || "",
-                  rate: selectedTicket.rate ? selectedTicket.rate.toString() : "",
-                  currency: selectedTicket.currency || "IQD",
-                });
-                setIsEditing(true);
-              }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              Edit
-            </button>
+           {currentUser?.role === "admin" && (
+  <button
+    onClick={() => {
+      setEditForm({
+        title: selectedTicket.title || "",
+        description: selectedTicket.description || "",
+        assignedTo: selectedTicket.assignedTo || "",
+        priority: selectedTicket.priority || "medium",
+        dueDate: selectedTicket.dueDate
+          ? selectedTicket.dueDate.slice(0, 10)
+          : "",
+        company: selectedTicket.company || "",
+        rate: selectedTicket.rate ? selectedTicket.rate.toString() : "",
+        currency: selectedTicket.currency || "IQD",
+      });
+      setIsEditing(true);
+    }}
+    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+  >
+    Edit
+  </button>
+)}
             <button
               onClick={() => {
                 setIsEditing(false); // ✅ إذا كان بوضع Edit نرجع عادي

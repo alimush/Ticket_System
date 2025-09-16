@@ -253,35 +253,27 @@ export default function ReportPage() {
                 </td>
                 <td
   onClick={async (e) => {
-    e.stopPropagation();
-
-    if (t.status === "open") {
-      const res = await fetch(`/api/tickets/${t._id}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "done" }),
-      });
-
-      if (res.ok) {
-        const updated = await res.json();
-        setTickets((prev) =>
-          prev.map((ticket) =>
-            ticket._id === updated._id ? updated : ticket
-          )
-        );
-        setFiltered((prev) =>
-          prev.map((ticket) =>
-            ticket._id === updated._id ? updated : ticket
-          )
-        );
-      }
+    e.stopPropagation(); // حتى ما يفتح الـ popup
+    const newStatus = t.status === "done" ? "open" : "done";
+    const res = await fetch(`/api/tickets/${t._id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: newStatus }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setTickets((prev) =>
+        prev.map((ticket) => (ticket._id === updated._id ? updated : ticket))
+      );
+      setFiltered((prev) =>
+        prev.map((ticket) => (ticket._id === updated._id ? updated : ticket))
+      );
     }
   }}
-  className={`px-4 py-2 border border-gray-200 font-semibold text-center transition
-    ${t.status === "open" ? "cursor-pointer hover:bg-green-100" : ""}`}
+  className="px-4 py-2 border border-gray-200 font-semibold text-center cursor-pointer transition hover:bg-yellow-100"
 >
   {t.status === "done" ? (
-    <span className="px-2 py-1 text-xs rounded-full bg-green-200 text-green-700">
+    <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
       Done
     </span>
   ) : (
