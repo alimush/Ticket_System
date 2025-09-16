@@ -26,6 +26,8 @@ const TicketSchema = new mongoose.Schema(
     },
     // 🟢 التاريخ الجديد
     doneAt: { type: Date, default: null },
+    rate: { type: Number, default: null },
+    currency: { type: String, default: "IQD" },
   },
   { collection: "tickets", timestamps: true }
 );

@@ -6,6 +6,7 @@ import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import { getCurrentUser, isAdmin } from "@/lib/permissions";
 import NoPermission from "@/components/NoPermission";
+import { AiOutlineDelete } from "react-icons/ai";
 
 export default function ReportPage() {
   const [tickets, setTickets] = useState([]);
@@ -111,6 +112,7 @@ export default function ReportPage() {
         "Done At": t.doneAt ? new Date(t.doneAt).toLocaleString() : "—",
         Status: t.status,
         Paid: t.paid,
+        Rate: t.rate ? `${t.rate.toLocaleString()}${t.currency || ""}` : "—",
       }))
     );
 
@@ -182,6 +184,7 @@ export default function ReportPage() {
           >
             Export Excel
           </button>
+          
         </div>
       </div>
 
@@ -205,6 +208,8 @@ export default function ReportPage() {
               <th className="px-4 py-3 border border-gray-300 text-left">Done At</th>
               <th className="px-4 py-3 border border-gray-300 text-left">Status</th>
               <th className="px-4 py-3 border border-gray-300 text-left">Paid</th>
+              <th className="px-12 py-3 border border-gray-300 text-left">Rate</th>
+              <th className="px-4 py-3 border border-gray-300 text-left">Delete</th>
             </tr>
           </thead>
 
@@ -229,7 +234,7 @@ export default function ReportPage() {
                   show: { opacity: 1, y: 0 },
                 }}
                 transition={{ duration: 0.3 }}
-                className="hover:bg-gray-50 even:bg-gray-100 cursor-pointer"
+                className="hover:bg-blue-50 even:bg-gray-50 cursor-pointer"
                 onClick={() => setSelectedTicket(t)}
               >
                 <td className="px-4 py-2 border border-gray-200">{t.title}</td>
@@ -246,28 +251,110 @@ export default function ReportPage() {
                 <td className="px-4 py-2 border border-gray-200">
                   {t.doneAt ? new Date(t.doneAt).toLocaleString() : "—"}
                 </td>
-                <td className="px-4 py-2 border border-gray-200 font-semibold">
-                  {t.status === "done" ? (
-                    <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
-                      Done
-                    </span>
-                  ) : (
-                    <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">
-                      {t.status}
-                    </span>
-                  )}
-                </td>
-                <td className="px-4 py-2 border border-gray-200 font-semibold">
-                  {t.paid === "yes" ? (
-                    <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
-                      Yes
-                    </span>
-                  ) : (
-                    <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">
-                      No
-                    </span>
-                  )}
-                </td>
+                <td
+  onClick={async (e) => {
+    e.stopPropagation();
+
+    if (t.status === "open") {
+      const res = await fetch(`/api/tickets/${t._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "done" }),
+      });
+
+      if (res.ok) {
+        const updated = await res.json();
+        setTickets((prev) =>
+          prev.map((ticket) =>
+            ticket._id === updated._id ? updated : ticket
+          )
+        );
+        setFiltered((prev) =>
+          prev.map((ticket) =>
+            ticket._id === updated._id ? updated : ticket
+          )
+        );
+      }
+    }
+  }}
+  className={`px-4 py-2 border border-gray-200 font-semibold text-center transition
+    ${t.status === "open" ? "cursor-pointer hover:bg-green-100" : ""}`}
+>
+  {t.status === "done" ? (
+    <span className="px-2 py-1 text-xs rounded-full bg-green-200 text-green-700">
+      Done
+    </span>
+  ) : (
+    <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">
+      Open
+    </span>
+  )}
+</td>
+                <td
+  onClick={async (e) => {
+    e.stopPropagation(); // حتى ما يفتح الـ popup
+    const newPaid = t.paid === "yes" ? "no" : "yes";
+    const res = await fetch(`/api/tickets/${t._id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ paid: newPaid }),
+    });
+    if (res.ok) {
+      const updated = await res.json();
+      setTickets((prev) =>
+        prev.map((ticket) =>
+          ticket._id === updated._id ? updated : ticket
+        )
+      );
+      setFiltered((prev) =>
+        prev.map((ticket) =>
+          ticket._id === updated._id ? updated : ticket
+        )
+      );
+    }
+  }}
+  className="px-4 py-2 border border-gray-200 font-semibold text-center cursor-pointer hover:bg-yellow-100 transition"
+>
+  {t.paid === "yes" ? (
+    <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
+      Yes
+    </span>
+  ) : (
+    <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">
+      No
+    </span>
+  )}
+</td>
+<td className="px-4 py-2 border border-gray-200">
+  {t.rate ? (
+    <span>
+      {t.rate.toLocaleString()} <span className="ml-1">{t.currency}</span>
+    </span>
+  ) : (
+    "—"
+  )}
+</td>
+<td
+  onClick={async (e) => {
+    e.stopPropagation(); // حتى ما يفتح الـ popup
+
+    if (confirm("هل تريد بالتأكيد حذف هذا التكت؟")) {
+      const res = await fetch(`/api/tickets/${t._id}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        setTickets((prev) => prev.filter((ticket) => ticket._id !== t._id));
+        setFiltered((prev) => prev.filter((ticket) => ticket._id !== t._id));
+      } else {
+        alert("فشل الحذف");
+      }
+    }
+  }}
+  className="px-4 py-2 border border-gray-200 text-center text-red-600 cursor-pointer hover:bg-red-100 transition"
+>
+  <AiOutlineDelete size={18} className="inline-block" />
+</td>
               </motion.tr>
             ))}
           </motion.tbody>
