@@ -1,17 +1,19 @@
 "use client";
 import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
-import Select from "react-select";
+import dynamic from "next/dynamic";
+const Select = dynamic(() => import("react-select"), { ssr: false });
 import * as XLSX from "xlsx";
 import { saveAs } from "file-saver";
 import { getCurrentUser, isAdmin } from "@/lib/permissions";
-import NoPermission from "@/components/NoPermission";
+
 import { AiOutlineDelete } from "react-icons/ai";
 
 export default function ReportPage() {
   const [tickets, setTickets] = useState([]);
   const [filtered, setFiltered] = useState([]);
   const [selectedTicket, setSelectedTicket] = useState(null);
+  const [filterStatus, setFilterStatus] = useState(null);
 
   // pagination
   const [currentPage, setCurrentPage] = useState(1);
@@ -28,21 +30,29 @@ export default function ReportPage() {
   const [companyOptions, setCompanyOptions] = useState([]);
 
   // 🟢 fetch tickets
-  const fetchTickets = async () => {
+  const fetchTickets = async (user) => {
     try {
       const res = await fetch("/api/tickets");
       const data = await res.json();
+  
       if (Array.isArray(data)) {
-        setTickets(data);
-        setFiltered(data);
-
-        // unique users
+        // ✅ فلترة حسب الصلاحية
+        if (!isAdmin(user)) {
+          const userName = user?.name || user?.username || ""; // غيّر حسب النظام
+          const userTickets = data.filter((t) => t.assignedTo === userName);
+          setTickets(userTickets);
+          setFiltered(userTickets);
+        } else {
+          setTickets(data);
+          setFiltered(data);
+        }
+  
+        // ✅ توليد القوائم المنسدلة
         const uniqueUsers = [
           ...new Set(data.map((t) => t.assignedTo).filter(Boolean)),
         ];
         setUserOptions(uniqueUsers.map((u) => ({ value: u, label: u })));
-
-        // unique companies
+  
         const uniqueCompanies = [
           ...new Set(data.map((t) => t.company).filter(Boolean)),
         ];
@@ -52,13 +62,17 @@ export default function ReportPage() {
       console.error("❌ Error fetching tickets:", err);
     }
   };
-
   useEffect(() => {
-    if (typeof window !== "undefined") {
-      setCurrentUser(getCurrentUser());
-    }
-    fetchTickets();
+    if (typeof window === "undefined") return;
+    const user = getCurrentUser();
+    setCurrentUser(user);
   }, []);
+  
+  useEffect(() => {
+    if (currentUser) {
+      fetchTickets(currentUser);
+    }
+  }, [currentUser]);
 
   // 🟢 filter
   useEffect(() => {
@@ -81,14 +95,18 @@ export default function ReportPage() {
         (t) => t.dueDate && t.dueDate >= filterDateFrom
       );
     }
+    if (filterStatus) {
+      filteredData = filteredData.filter((t) => t.status === filterStatus.value);
+    }
     if (filterDateTo) {
       filteredData = filteredData.filter(
         (t) => t.dueDate && t.dueDate <= filterDateTo
       );
     }
+
     setFiltered(filteredData);
     setCurrentPage(1); // رجع للبداية عند الفلترة
-  }, [filterUser, filterCompany, filterPaid, filterDateFrom, filterDateTo, tickets]);
+  }, [filterUser, filterCompany, filterPaid, filterStatus,filterDateFrom, filterDateTo, tickets]);
 
   // 🟢 pagination logic
   const indexOfLastRow = currentPage * rowsPerPage;
@@ -130,8 +148,13 @@ export default function ReportPage() {
   };
 
   // 🟢 only admin
-  if (!currentUser) return null;
-  if (!isAdmin(currentUser)) return <NoPermission />;
+  // if (!currentUser) return null;
+  // if (!isAdmin(currentUser)) return <NoPermission />;
+  // 🧮 حساب مجموع rate من البيانات الحالية
+const subtotalRate = filtered.reduce(
+  (sum, t) => sum + (parseFloat(t.rate) || 0),
+  0
+);
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 p-4">
@@ -139,14 +162,16 @@ export default function ReportPage() {
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <h1 className="text-xl font-bold text-gray-800">Tickets Report</h1>
         <div className="flex flex-wrap gap-2 items-center">
-          <Select
-            options={userOptions}
-            value={filterUser}
-            onChange={setFilterUser}
-            placeholder="User..."
-            isClearable
-            className="w-36 text-xs"
-          />
+        {isAdmin(currentUser) && (
+  <Select
+    options={userOptions}
+    value={filterUser}
+    onChange={setFilterUser}
+    placeholder="User..."
+    isClearable
+    className="w-36 text-xs"
+  />
+)}
           <Select
             options={companyOptions}
             value={filterCompany}
@@ -155,6 +180,17 @@ export default function ReportPage() {
             isClearable
             className="w-36 text-xs"
           />
+          <Select
+  options={[
+    { value: "open", label: "Open" },
+    { value: "done", label: "Done" },
+  ]}
+  value={filterStatus}
+  onChange={setFilterStatus}
+  placeholder="Status..."
+  isClearable
+  className="w-28 text-xs"
+/>
           <Select
             options={[
               { value: "yes", label: "Yes" },
@@ -209,7 +245,9 @@ export default function ReportPage() {
               <th className="px-4 py-3 border border-gray-300 text-left">Status</th>
               <th className="px-4 py-3 border border-gray-300 text-left">Paid</th>
               <th className="px-12 py-3 border border-gray-300 text-left">Rate</th>
-              <th className="px-4 py-3 border border-gray-300 text-left">Delete</th>
+              {isAdmin(currentUser) && (
+  <th className="px-4 py-3 border border-gray-300 text-left">Delete</th>
+)}
             </tr>
           </thead>
 
@@ -282,15 +320,25 @@ export default function ReportPage() {
     </span>
   )}
 </td>
-                <td
+
+
+<td
   onClick={async (e) => {
     e.stopPropagation(); // حتى ما يفتح الـ popup
-    const newPaid = t.paid === "yes" ? "no" : "yes";
+
+    // 🔒 إذا كانت الحالة "yes" لا تسمح بالتعديل
+    if (t.paid === "yes") {
+      alert("❌ لا يمكن التراجع بعد وضع الحالة على Yes.");
+      return;
+    }
+
+    // ✅ إذا كانت No، سمح بتحويلها إلى Yes فقط
     const res = await fetch(`/api/tickets/${t._id}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paid: newPaid }),
+      body: JSON.stringify({ paid: "yes" }),
     });
+
     if (res.ok) {
       const updated = await res.json();
       setTickets((prev) =>
@@ -305,17 +353,24 @@ export default function ReportPage() {
       );
     }
   }}
-  className="px-4 py-2 border border-gray-200 font-semibold text-center cursor-pointer hover:bg-yellow-100 transition"
+  className={`px-4 py-2 border border-gray-200 font-semibold text-center transition ${
+    
+    isAdmin(currentUser)
+    ? t.paid === "yes"
+      ? "cursor-not-allowed bg-green-50"
+      : "cursor-pointer hover:bg-yellow-100"
+    : "cursor-default bg-gray-50" // ✅ المستخدم العادي
+}`}
 >
-  {t.paid === "yes" ? (
-    <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
-      Yes
-    </span>
-  ) : (
-    <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">
-      No
-    </span>
-  )}
+{t.paid === "yes" ? (
+  <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
+    Yes
+  </span>
+) : (
+  <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">
+    No
+  </span>
+)}
 </td>
 <td className="px-4 py-2 border border-gray-200">
   {t.rate ? (
@@ -326,30 +381,43 @@ export default function ReportPage() {
     "—"
   )}
 </td>
-<td
-  onClick={async (e) => {
-    e.stopPropagation(); // حتى ما يفتح الـ popup
+{isAdmin(currentUser) && (
+  <td
+    onClick={async (e) => {
+      e.stopPropagation(); // حتى ما يفتح الـ popup
 
-    if (confirm("هل تريد بالتأكيد حذف هذا التكت؟")) {
-      const res = await fetch(`/api/tickets/${t._id}`, {
-        method: "DELETE",
-      });
+      if (confirm("هل تريد بالتأكيد حذف هذا التكت؟")) {
+        const res = await fetch(`/api/tickets/${t._id}`, {
+          method: "DELETE",
+        });
 
-      if (res.ok) {
-        setTickets((prev) => prev.filter((ticket) => ticket._id !== t._id));
-        setFiltered((prev) => prev.filter((ticket) => ticket._id !== t._id));
-      } else {
-        alert("فشل الحذف");
+        if (res.ok) {
+          setTickets((prev) => prev.filter((ticket) => ticket._id !== t._id));
+          setFiltered((prev) => prev.filter((ticket) => ticket._id !== t._id));
+        } else {
+          alert("فشل الحذف");
+        }
       }
-    }
-  }}
-  className="px-4 py-2 border border-gray-200 text-center text-red-600 cursor-pointer hover:bg-red-100 transition"
->
-  <AiOutlineDelete size={18} className="inline-block" />
-</td>
+    }}
+    className="px-4 py-2 border border-gray-200 text-center text-red-600 cursor-pointer hover:bg-red-100 transition"
+  >
+    <AiOutlineDelete size={18} className="inline-block" />
+  </td>
+)}
               </motion.tr>
             ))}
           </motion.tbody>
+          <tfoot className="bg-gray-800 font-semibold text-white">
+  <tr>
+    <td colSpan="10" className="text-right px-4 py-3 border border-gray-300">
+      Subtotal:
+    </td>
+    <td className="px-4 py-3 border border-gray-300 text-right">
+      {subtotalRate.toLocaleString()} IQD
+    </td>
+    <td className="border border-gray-300"></td>
+  </tr>
+</tfoot>
         </motion.table>
       </div>
 
@@ -448,6 +516,7 @@ export default function ReportPage() {
               <div className="border rounded-lg p-3">
                 <h3 className="text-xs text-gray-500">Paid</h3>
                 <p className="font-medium">
+                  
                   {selectedTicket.paid === "yes" ? (
                     <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
                       Yes

@@ -67,8 +67,8 @@ export default function Header({ onLogout }) {
           <span className={`text-[11px] text-gray-300 ${poppins.className}`}>
             Developed by SPC team
           </span>
-          <span className="absolute -bottom-2 left-6 h-[2px] w-16 rounded-full
-                           bg-gradient-to-r from-gray-500 via-gray-400 to-gray-300 opacity-80" />
+          {/* <span className="absolute -bottom-2 left-6 h-[2px] w-16 rounded-full
+                           bg-gradient-to-r from-gray-500 via-gray-400 to-gray-300 opacity-80" /> */}
         </div>
 
         {/* الوسط */}
@@ -165,7 +165,7 @@ export default function Header({ onLogout }) {
                             label="Companies"
                           />
                         )}
-                        {role === "admin" && (
+
                           <MenuItem
                             onClick={() => {
                               setMenuOpen(false);
@@ -174,7 +174,7 @@ export default function Header({ onLogout }) {
                             icon={<BiSolidReport className="text-gray-200" />}
                             label="Reports"
                           />
-                        )}
+
                         <MenuItem
                           onClick={handleLogout}
                           icon={<FaSignOutAlt className="text-red-400" />}
