@@ -28,17 +28,17 @@ export default function ReportPage() {
   const [currentUser, setCurrentUser] = useState(null);
   const [userOptions, setUserOptions] = useState([]);
   const [companyOptions, setCompanyOptions] = useState([]);
-
+  const [loading, setLoading] = useState(true);
   // 🟢 fetch tickets
   const fetchTickets = async (user) => {
     try {
+      setLoading(true); // 🟢 يبدأ التحميل
       const res = await fetch("/api/tickets");
       const data = await res.json();
   
       if (Array.isArray(data)) {
-        // ✅ فلترة حسب الصلاحية
         if (!isAdmin(user)) {
-          const userName = user?.name || user?.username || ""; // غيّر حسب النظام
+          const userName = user?.name || user?.username || "";
           const userTickets = data.filter((t) => t.assignedTo === userName);
           setTickets(userTickets);
           setFiltered(userTickets);
@@ -47,7 +47,6 @@ export default function ReportPage() {
           setFiltered(data);
         }
   
-        // ✅ توليد القوائم المنسدلة
         const uniqueUsers = [
           ...new Set(data.map((t) => t.assignedTo).filter(Boolean)),
         ];
@@ -60,6 +59,8 @@ export default function ReportPage() {
       }
     } catch (err) {
       console.error("❌ Error fetching tickets:", err);
+    } finally {
+      setLoading(false); // 🔵 يوقف اللود سبنر بعد الجلب
     }
   };
   useEffect(() => {
@@ -224,220 +225,225 @@ const subtotalRate = filtered.reduce(
         </div>
       </div>
 
-      {/* Table */}
-      <div className="overflow-x-auto bg-white rounded-lg shadow border">
-        <motion.table
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ duration: 0.5 }}
-          className="min-w-full border border-gray-300 text-sm"
-        >
-          <thead className="bg-gray-800 text-white">
-            <tr>
-              <th className="px-4 py-3 border border-gray-300 text-left">Title</th>
-              <th className="px-4 py-3 border border-gray-300 text-left">Description</th>
-              <th className="px-4 py-3 border border-gray-300 text-left">Assigned To</th>
-              <th className="px-4 py-3 border border-gray-300 text-left">Created By</th>
-              <th className="px-4 py-3 border border-gray-300 text-left">Company</th>
-              <th className="px-4 py-3 border border-gray-300 text-left">Priority</th>
-              <th className="px-4 py-3 border border-gray-300 text-left">Due Date</th>
-              <th className="px-4 py-3 border border-gray-300 text-left">Done At</th>
-              <th className="px-4 py-3 border border-gray-300 text-left">Status</th>
-              <th className="px-4 py-3 border border-gray-300 text-left">Paid</th>
-              <th className="px-12 py-3 border border-gray-300 text-left">Rate</th>
-              {isAdmin(currentUser) && (
-  <th className="px-4 py-3 border border-gray-300 text-left">Delete</th>
-)}
-            </tr>
-          </thead>
-
-          <motion.tbody
-            className="divide-y divide-gray-200"
-            key={filtered.length} // ✅ يخلي الأنيميشن يشتغل لما يتغير الفلتر
-            initial="hidden"
-            animate="show"
-            variants={{
-              hidden: { opacity: 0 },
-              show: {
-                opacity: 1,
-                transition: { staggerChildren: 0.05 },
-              },
-            }}
-          >
-            {currentRows.map((t) => (
-              <motion.tr
-                key={t._id}
-                variants={{
-                  hidden: { opacity: 0, y: 10 },
-                  show: { opacity: 1, y: 0 },
-                }}
-                transition={{ duration: 0.3 }}
-                className="hover:bg-blue-50 even:bg-gray-50 cursor-pointer"
-                onClick={() => setSelectedTicket(t)}
-              >
-                <td className="px-4 py-2 border border-gray-200">{t.title}</td>
-                <td className="px-4 py-2 border border-gray-200 whitespace-pre-wrap break-words">
-                  {t.description}
-                </td>
-                <td className="px-4 py-2 border border-gray-200">{t.assignedTo}</td>
-                <td className="px-4 py-2 border border-gray-200">{t.createdBy}</td>
-                <td className="px-4 py-2 border border-gray-200">{t.company || "—"}</td>
-                <td className="px-4 py-2 border border-gray-200">{t.priority}</td>
-                <td className="px-4 py-2 border border-gray-200">
-                  {t.dueDate?.slice(0, 10) || "—"}
-                </td>
-                <td className="px-4 py-2 border border-gray-200">
-                  {t.doneAt ? new Date(t.doneAt).toLocaleString() : "—"}
-                </td>
-                <td
-  onClick={async (e) => {
-    e.stopPropagation(); // حتى ما يفتح الـ popup
-    const newStatus = t.status === "done" ? "open" : "done";
-    const res = await fetch(`/api/tickets/${t._id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status: newStatus }),
-    });
-    if (res.ok) {
-      const updated = await res.json();
-      setTickets((prev) =>
-        prev.map((ticket) => (ticket._id === updated._id ? updated : ticket))
-      );
-      setFiltered((prev) =>
-        prev.map((ticket) => (ticket._id === updated._id ? updated : ticket))
-      );
-    }
-  }}
-  className="px-4 py-2 border border-gray-200 font-semibold text-center cursor-pointer transition hover:bg-yellow-100"
->
-  {t.status === "done" ? (
-    <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
-      Done
-    </span>
-  ) : (
-    <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">
-      Open
-    </span>
-  )}
-</td>
-
-
-<td
-  onClick={async (e) => {
-    e.stopPropagation(); // حتى ما يفتح الـ popup
-
-    // 🔒 إذا كانت الحالة "yes" لا تسمح بالتعديل
-    if (t.paid === "yes") {
-      alert("❌ لا يمكن التراجع بعد وضع الحالة على Yes.");
-      return;
-    }
-
-    // ✅ إذا كانت No، سمح بتحويلها إلى Yes فقط
-    const res = await fetch(`/api/tickets/${t._id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paid: "yes" }),
-    });
-
-    if (res.ok) {
-      const updated = await res.json();
-      setTickets((prev) =>
-        prev.map((ticket) =>
-          ticket._id === updated._id ? updated : ticket
-        )
-      );
-      setFiltered((prev) =>
-        prev.map((ticket) =>
-          ticket._id === updated._id ? updated : ticket
-        )
-      );
-    }
-  }}
-  className={`px-4 py-2 border border-gray-200 font-semibold text-center transition ${
-    
-    isAdmin(currentUser)
-    ? t.paid === "yes"
-      ? "cursor-not-allowed bg-green-50"
-      : "cursor-pointer hover:bg-yellow-100"
-    : "cursor-default bg-gray-50" // ✅ المستخدم العادي
-}`}
->
-{t.paid === "yes" ? (
-  <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
-    Yes
-  </span>
+     {/* Table */}
+{loading ? (
+  // 🔄 لود سبنر أثناء التحميل
+  <div className="flex justify-center items-center min-h-[300px]">
+    <motion.div
+      className="w-14 h-14 border-4 border-gray-400 border-t-transparent rounded-full animate-spin"
+      initial={{ rotate: 0 }}
+      animate={{ rotate: 360 }}
+      transition={{ repeat: Infinity, duration: 1 }}
+    />
+  </div>
 ) : (
-  <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">
-    No
-  </span>
-)}
-</td>
-<td className="px-4 py-2 border border-gray-200">
-  {t.rate ? (
-    <span>
-      {t.rate.toLocaleString()} <span className="ml-1">{t.currency}</span>
-    </span>
-  ) : (
-    "—"
-  )}
-</td>
-{isAdmin(currentUser) && (
-  <td
-    onClick={async (e) => {
-      e.stopPropagation(); // حتى ما يفتح الـ popup
+  <div className="overflow-x-auto bg-white rounded-xl shadow border border-gray-200">
+    <motion.table
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.6 }}
+      className="min-w-full border border-gray-300 text-sm rounded-lg overflow-hidden shadow-sm"
+    >
+      {/* 🔹 الهيدر */}
+      <thead className="bg-gradient-to-r from-gray-700 to-gray-800 text-white">
+        <tr>
+          <th className="px-4 py-3 border border-gray-300 text-left">Title</th>
+          <th className="px-4 py-3 border border-gray-300 text-left">Description</th>
+          <th className="px-4 py-3 border border-gray-300 text-left">Assigned To</th>
+          <th className="px-4 py-3 border border-gray-300 text-left">Created By</th>
+          <th className="px-4 py-3 border border-gray-300 text-left">Company</th>
+          <th className="px-4 py-3 border border-gray-300 text-left">Priority</th>
+          <th className="px-4 py-3 border border-gray-300 text-left">Due Date</th>
+          <th className="px-4 py-3 border border-gray-300 text-left">Done At</th>
+          <th className="px-4 py-3 border border-gray-300 text-left">Status</th>
+          <th className="px-4 py-3 border border-gray-300 text-left">Paid</th>
+          <th className="px-12 py-3 border border-gray-300 text-left">Rate</th>
+          {isAdmin(currentUser) && (
+            <th className="px-4 py-3 border border-gray-300 text-left">Delete</th>
+          )}
+        </tr>
+      </thead>
 
-      if (confirm("هل تريد بالتأكيد حذف هذا التكت؟")) {
-        const res = await fetch(`/api/tickets/${t._id}`, {
-          method: "DELETE",
-        });
-
-        if (res.ok) {
-          setTickets((prev) => prev.filter((ticket) => ticket._id !== t._id));
-          setFiltered((prev) => prev.filter((ticket) => ticket._id !== t._id));
-        } else {
-          alert("فشل الحذف");
-        }
-      }
-    }}
-    className="px-4 py-2 border border-gray-200 text-center text-red-600 cursor-pointer hover:bg-red-100 transition"
-  >
-    <AiOutlineDelete size={18} className="inline-block" />
-  </td>
-)}
-              </motion.tr>
-            ))}
-          </motion.tbody>
-          <tfoot className="bg-gray-800 font-semibold text-white">
-  <tr>
-    <td colSpan="10" className="text-right px-4 py-3 border border-gray-300">
-      Subtotal:
-    </td>
-    <td className="px-4 py-3 border border-gray-300 text-right">
-      {subtotalRate.toLocaleString()} IQD
-    </td>
-    <td className="border border-gray-300"></td>
-  </tr>
-</tfoot>
-        </motion.table>
-      </div>
-
-      {/* Pagination */}
-      <div className="flex justify-center mt-4 gap-2 text-xs">
-        {Array.from({ length: totalPages }, (_, i) => (
-          <button
-            key={i + 1}
-            onClick={() => paginate(i + 1)}
-            className={`px-2 py-1 rounded ${
-              currentPage === i + 1
-                ? "bg-blue-600 text-white"
-                : "bg-gray-200 text-gray-700 hover:bg-gray-300"
-            }`}
+      {/* 🔹 جسم الجدول */}
+      <motion.tbody
+        className="divide-y divide-gray-200"
+        key={filtered.length}
+        initial="hidden"
+        animate="show"
+        variants={{
+          hidden: { opacity: 0 },
+          show: {
+            opacity: 1,
+            transition: { staggerChildren: 0.05 },
+          },
+        }}
+      >
+        {currentRows.map((t) => (
+          <motion.tr
+            key={t._id}
+            variants={{
+              hidden: { opacity: 0, y: 10 },
+              show: { opacity: 1, y: 0 },
+            }}
+            transition={{ duration: 0.3 }}
+            className="hover:bg-gray-100 even:bg-gray-50 cursor-pointer transition-colors"
+            onClick={() => setSelectedTicket(t)}
           >
-            {i + 1}
-          </button>
-        ))}
-      </div>
+            <td className="px-4 py-2 border border-gray-200">{t.title}</td>
+            <td className="px-4 py-2 border border-gray-200 whitespace-pre-wrap break-words">
+              {t.description}
+            </td>
+            <td className="px-4 py-2 border border-gray-200">{t.assignedTo}</td>
+            <td className="px-4 py-2 border border-gray-200">{t.createdBy}</td>
+            <td className="px-4 py-2 border border-gray-200">{t.company || "—"}</td>
+            <td className="px-4 py-2 border border-gray-200">{t.priority}</td>
+            <td className="px-4 py-2 border border-gray-200">
+              {t.dueDate?.slice(0, 10) || "—"}
+            </td>
+            <td className="px-4 py-2 border border-gray-200">
+              {t.doneAt ? new Date(t.doneAt).toLocaleString() : "—"}
+            </td>
 
+            {/* ✅ Status */}
+            <td
+              onClick={async (e) => {
+                e.stopPropagation();
+                const newStatus = t.status === "done" ? "open" : "done";
+                const res = await fetch(`/api/tickets/${t._id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ status: newStatus }),
+                });
+                if (res.ok) {
+                  const updated = await res.json();
+                  setTickets((prev) =>
+                    prev.map((ticket) =>
+                      ticket._id === updated._id ? updated : ticket
+                    )
+                  );
+                  setFiltered((prev) =>
+                    prev.map((ticket) =>
+                      ticket._id === updated._id ? updated : ticket
+                    )
+                  );
+                }
+              }}
+              className="px-4 py-2 border border-gray-200 font-semibold text-center cursor-pointer transition hover:bg-gray-200"
+            >
+              {t.status === "done" ? (
+                <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
+                  Done
+                </span>
+              ) : (
+                <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">
+                  Open
+                </span>
+              )}
+            </td>
+
+            {/* ✅ Paid */}
+            <td
+              onClick={async (e) => {
+                e.stopPropagation();
+                if (t.paid === "yes") {
+                  alert("❌ لا يمكن التراجع بعد وضع الحالة على Yes.");
+                  return;
+                }
+                const res = await fetch(`/api/tickets/${t._id}`, {
+                  method: "PATCH",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ paid: "yes" }),
+                });
+                if (res.ok) {
+                  const updated = await res.json();
+                  setTickets((prev) =>
+                    prev.map((ticket) =>
+                      ticket._id === updated._id ? updated : ticket
+                    )
+                  );
+                  setFiltered((prev) =>
+                    prev.map((ticket) =>
+                      ticket._id === updated._id ? updated : ticket
+                    )
+                  );
+                }
+              }}
+              className={`px-4 py-2 border border-gray-200 font-semibold text-center transition ${
+                isAdmin(currentUser)
+                  ? t.paid === "yes"
+                    ? "cursor-not-allowed bg-green-50"
+                    : "cursor-pointer hover:bg-gray-200"
+                  : "cursor-default bg-gray-50"
+              }`}
+            >
+              {t.paid === "yes" ? (
+                <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
+                  Yes
+                </span>
+              ) : (
+                <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">
+                  No
+                </span>
+              )}
+            </td>
+
+            {/* ✅ Rate */}
+            <td className="px-4 py-2 border border-gray-200">
+              {t.rate ? (
+                <span>
+                  {t.rate.toLocaleString()}{" "}
+                  <span className="ml-1">{t.currency}</span>
+                </span>
+              ) : (
+                "—"
+              )}
+            </td>
+
+            {/* ✅ Delete */}
+            {isAdmin(currentUser) && (
+              <td
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  if (confirm("هل تريد بالتأكيد حذف هذا التكت؟")) {
+                    const res = await fetch(`/api/tickets/${t._id}`, {
+                      method: "DELETE",
+                    });
+                    if (res.ok) {
+                      setTickets((prev) =>
+                        prev.filter((ticket) => ticket._id !== t._id)
+                      );
+                      setFiltered((prev) =>
+                        prev.filter((ticket) => ticket._id !== t._id)
+                      );
+                    } else {
+                      alert("فشل الحذف");
+                    }
+                  }
+                }}
+                className="px-4 py-2 border border-gray-200 text-center text-red-600 cursor-pointer hover:bg-red-100 transition"
+              >
+                <AiOutlineDelete size={18} className="inline-block" />
+              </td>
+            )}
+          </motion.tr>
+        ))}
+      </motion.tbody>
+
+      {/* 🔹 الفوتر */}
+      <tfoot className="bg-gray-700 font-semibold text-white">
+        <tr>
+          <td colSpan="10" className="text-right px-4 py-3 border border-gray-600">
+            Subtotal:
+          </td>
+          <td className="px-4 py-3 border border-gray-600 text-right">
+            {subtotalRate.toLocaleString()} IQD
+          </td>
+          <td className="border border-gray-600"></td>
+        </tr>
+      </tfoot>
+    </motion.table>
+  </div>
+)}
       {/* Popup */}
       {selectedTicket && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
