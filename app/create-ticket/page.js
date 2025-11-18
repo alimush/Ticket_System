@@ -211,14 +211,14 @@ const [editForm, setEditForm] = useState({});
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Tickets</h1>
-       
+        
           <button
             onClick={() => setIsModalOpen(true)}
             className="bg-gray-800 text-white font-medium px-6 py-2 rounded-lg hover:bg-gray-700 transition"
           >
             + Create Ticket
           </button>
-        
+
       </div>
       
 
@@ -328,7 +328,7 @@ const [editForm, setEditForm] = useState({});
       </div>
 
       {/* Create Ticket Modal */}
-      {isModalOpen && canCreateTicket(currentUser) && (
+      {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center   p-4">
          <motion.div
   initial={{ y: 40, opacity: 0 }}
