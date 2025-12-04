@@ -385,12 +385,17 @@ const [editForm, setEditForm] = useState({});
   className="w-full border rounded-lg p-2 bg-gray-50 border-gray-300 text-gray-900"
   value={rate}
   onChange={(e) => {
-    const rawValue = e.target.value.replace(/,/g, ""); // نشيل الفواصل
-    if (rawValue === "") {
-      setRate(""); // فارغ
-    } else if (!isNaN(rawValue)) {
-      setRate(Number(rawValue).toLocaleString()); // نضيف commas
+    let raw = e.target.value.replace(/,/g, "");
+
+    if (raw === "-") {
+      setRate("-");
+      return;
     }
+
+    if (isNaN(raw)) return;
+
+    const num = Number(raw);
+    setRate(num.toLocaleString());
   }}
   placeholder="Enter amount..."
 />
