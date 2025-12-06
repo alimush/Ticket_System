@@ -152,10 +152,24 @@ export default function ReportPage() {
   // if (!currentUser) return null;
   // if (!isAdmin(currentUser)) return <NoPermission />;
   // 🧮 حساب مجموع rate من البيانات الحالية
-const subtotalRate = filtered.reduce(
-  (sum, t) => sum + (parseFloat(t.rate) || 0),
-  0
-);
+  const totalIQD = tickets.reduce(
+    (sum, t) => (t.currency === "IQD" ? sum + (parseFloat(t.rate) || 0) : sum),
+    0
+  );
+  
+  const totalUSD = tickets.reduce(
+    (sum, t) => (t.currency === "USD" ? sum + (parseFloat(t.rate) || 0) : sum),
+    0
+  );
+  const filteredIQD = filtered.reduce(
+    (sum, t) => (t.currency === "IQD" ? sum + (parseFloat(t.rate) || 0) : sum),
+    0
+  );
+  
+  const filteredUSD = filtered.reduce(
+    (sum, t) => (t.currency === "USD" ? sum + (parseFloat(t.rate) || 0) : sum),
+    0
+  );
 
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 p-4">
@@ -431,16 +445,32 @@ const subtotalRate = filtered.reduce(
 
       {/* 🔹 الفوتر */}
       <tfoot className="bg-gray-700 font-semibold text-white">
-        <tr>
-          <td colSpan="10" className="text-right px-4 py-3 border border-gray-600">
-            Subtotal:
-          </td>
-          <td className="px-4 py-3 border border-gray-600 text-right">
-            {subtotalRate.toLocaleString()} IQD
-          </td>
-          <td className="border border-gray-600"></td>
-        </tr>
-      </tfoot>
+  <tr>
+    <td colSpan="10" className="text-right px-4 py-3 border border-gray-600">
+      Subtotal IQD:
+    </td>
+    <td className="px-4 py-3 border border-gray-600 text-right">
+      {(filterUser || filterCompany || filterPaid || filterStatus || filterDateFrom || filterDateTo
+        ? filteredIQD
+        : totalIQD
+      ).toLocaleString()} IQD
+    </td>
+    <td className="border border-gray-600"></td>
+  </tr>
+
+  <tr>
+    <td colSpan="10" className="text-right px-4 py-3 border border-gray-600">
+      Subtotal USD:
+    </td>
+    <td className="px-4 py-3 border border-gray-600 text-right">
+      {(filterUser || filterCompany || filterPaid || filterStatus || filterDateFrom || filterDateTo
+        ? filteredUSD
+        : totalUSD
+      ).toLocaleString()} USD
+    </td>
+    <td className="border border-gray-600"></td>
+  </tr>
+</tfoot>
     </motion.table>
   </div>
 )}
