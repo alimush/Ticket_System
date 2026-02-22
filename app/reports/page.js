@@ -14,22 +14,6 @@ export default function ReportPage() {
   const [selectedTicket, setSelectedTicket] = useState(null);
   const [filterStatus, setFilterStatus] = useState(null);
 
-  // ✅ Popup Edit
-  const [isEditing, setIsEditing] = useState(false);
-  const [editForm, setEditForm] = useState({
-    title: "",
-    description: "",
-    assignedTo: "",
-    createdBy: "",
-    company: "",
-    priority: "medium",
-    dueDate: "",
-    status: "open",
-    paid: "no",
-    rate: "",
-    currency: "IQD",
-  });
-
   // pagination
   const [currentPage, setCurrentPage] = useState(1);
   const rowsPerPage = 50;
@@ -44,6 +28,35 @@ export default function ReportPage() {
   const [userOptions, setUserOptions] = useState([]);
   const [companyOptions, setCompanyOptions] = useState([]);
   const [loading, setLoading] = useState(true);
+
+  // =========================
+  // ✅ Popup Edit State
+  // =========================
+  const [isEditing, setIsEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [editForm, setEditForm] = useState({
+    title: "",
+    description: "",
+    assignedTo: null, // {value,label}
+    createdBy: "",
+    company: null, // {value,label}
+    priority: "",
+    dueDate: "",
+    status: "open",
+    paid: "no",
+    rate: "",
+    currency: "IQD",
+  });
+
+  // =========================
+  // Helpers
+  // =========================
+  const canEditTicket = (ticket) => {
+    if (!currentUser || !ticket) return false;
+    if (isAdmin(currentUser)) return true;
+    const userName = currentUser?.name || currentUser?.username || "";
+    return ticket.assignedTo === userName;
+  };
 
   // 🟢 fetch tickets
   const fetchTickets = async (user) => {
@@ -94,14 +107,23 @@ export default function ReportPage() {
     if (filterCompany) filteredData = filteredData.filter((t) => t.company === filterCompany.value);
     if (filterPaid) filteredData = filteredData.filter((t) => t.paid === filterPaid.value);
 
+    // ✅ تاريخ مضبوط
     if (filterDateFrom) {
-      filteredData = filteredData.filter((t) => t.dueDate && String(t.dueDate).slice(0, 10) >= filterDateFrom);
+      filteredData = filteredData.filter((t) => {
+        if (!t.dueDate) return false;
+        const d = String(t.dueDate).slice(0, 10);
+        return d >= filterDateFrom;
+      });
     }
 
     if (filterStatus) filteredData = filteredData.filter((t) => t.status === filterStatus.value);
 
     if (filterDateTo) {
-      filteredData = filteredData.filter((t) => t.dueDate && String(t.dueDate).slice(0, 10) <= filterDateTo);
+      filteredData = filteredData.filter((t) => {
+        if (!t.dueDate) return false;
+        const d = String(t.dueDate).slice(0, 10);
+        return d <= filterDateTo;
+      });
     }
 
     setFiltered(filteredData);
@@ -112,9 +134,36 @@ export default function ReportPage() {
   const indexOfLastRow = currentPage * rowsPerPage;
   const indexOfFirstRow = indexOfLastRow - rowsPerPage;
   const currentRows = filtered.slice(indexOfFirstRow, indexOfLastRow);
-  const totalPages = Math.ceil(filtered.length / rowsPerPage);
+  const totalPages = Math.max(1, Math.ceil(filtered.length / rowsPerPage));
 
-  const paginate = (pageNumber) => setCurrentPage(pageNumber);
+  const paginate = (pageNumber) => setCurrentPage(Math.min(Math.max(1, pageNumber), totalPages));
+  const nextPage = () => paginate(currentPage + 1);
+  const prevPage = () => paginate(currentPage - 1);
+
+  // ✅ Build pages list (1..N) بس بشكل مرتب
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxButtons = 7;
+    if (totalPages <= maxButtons) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+      return pages;
+    }
+
+    const left = Math.max(1, currentPage - 2);
+    const right = Math.min(totalPages, currentPage + 2);
+
+    pages.push(1);
+    if (left > 2) pages.push("...");
+
+    for (let i = left; i <= right; i++) {
+      if (i !== 1 && i !== totalPages) pages.push(i);
+    }
+
+    if (right < totalPages - 1) pages.push("...");
+    pages.push(totalPages);
+
+    return pages;
+  };
 
   // 🟢 excel export
   const exportToExcel = () => {
@@ -130,14 +179,14 @@ export default function ReportPage() {
         "Done At": t.doneAt ? new Date(t.doneAt).toLocaleString() : "—",
         Status: t.status,
         Paid: t.paid,
-        Rate: t.rate ? `${Number(t.rate).toLocaleString()}${t.currency || ""}` : "—",
+        Rate: t.rate ? `${Number(t.rate || 0).toLocaleString()}${t.currency || ""}` : "—",
       }))
     );
 
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, worksheet, "Tickets");
 
-    const excelBuffer = XLSX.write(workbook, { bookType: "xlsx", type: "array" });
+    const excelBuffer = XLSX.utils.write(workbook, { bookType: "xlsx", type: "array" });
     saveAs(new Blob([excelBuffer], { type: "application/octet-stream" }), `tickets_report.xlsx`);
   };
 
@@ -159,60 +208,90 @@ export default function ReportPage() {
     0
   );
 
-  // ✅ Popup helpers
-  const fillEditFormFromTicket = (t) => {
-    setEditForm({
-      title: t?.title || "",
-      description: t?.description || "",
-      assignedTo: t?.assignedTo || "",
-      createdBy: t?.createdBy || "",
-      company: t?.company || "",
-      priority: t?.priority || "medium",
-      dueDate: t?.dueDate ? String(t.dueDate).slice(0, 10) : "",
-      status: t?.status || "open",
-      paid: t?.paid || "no",
-      rate: t?.rate ?? "",
-      currency: t?.currency || "IQD",
-    });
-  };
+  const anyFilterApplied =
+    !!filterUser || !!filterCompany || !!filterPaid || !!filterStatus || !!filterDateFrom || !!filterDateTo;
 
-  const onEditChange = (key, value) => setEditForm((p) => ({ ...p, [key]: value }));
-
-  const saveEdits = async () => {
-    if (!selectedTicket?._id) return;
-
-    const payload = {
-      title: editForm.title,
-      description: editForm.description,
-      assignedTo: editForm.assignedTo,
-      company: editForm.company,
-      priority: editForm.priority,
-      dueDate: editForm.dueDate || null,
-      status: editForm.status,
-      paid: editForm.paid,
-      rate: editForm.rate === "" ? null : Number(editForm.rate),
-      currency: editForm.currency,
-    };
-
-    const res = await fetch(`/api/tickets/${selectedTicket._id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    });
-
-    if (!res.ok) {
-      alert("فشل الحفظ");
-      return;
-    }
-
-    const updated = await res.json();
-
-    setTickets((prev) => prev.map((x) => (x._id === updated._id ? updated : x)));
-    setFiltered((prev) => prev.map((x) => (x._id === updated._id ? updated : x)));
-    setSelectedTicket(updated);
+  // =========================
+  // ✅ Open Ticket in Popup + Load edit form
+  // =========================
+  const openTicket = (t) => {
+    setSelectedTicket(t);
     setIsEditing(false);
+
+    setEditForm({
+      title: t.title || "",
+      description: t.description || "",
+      assignedTo: t.assignedTo ? { value: t.assignedTo, label: t.assignedTo } : null,
+      createdBy: t.createdBy || "",
+      company: t.company ? { value: t.company, label: t.company } : null,
+      priority: t.priority || "",
+      dueDate: t.dueDate ? String(t.dueDate).slice(0, 10) : "",
+      status: t.status || "open",
+      paid: t.paid || "no",
+      rate: t.rate ?? "",
+      currency: t.currency || "IQD",
+    });
   };
 
+  // =========================
+  // ✅ Save edits
+  // =========================
+  const saveEdits = async () => {
+    if (!selectedTicket) return;
+    if (!canEditTicket(selectedTicket)) return;
+
+    try {
+      setSaving(true);
+
+      const payload = {
+        title: editForm.title,
+        description: editForm.description,
+        assignedTo: editForm.assignedTo?.value || "",
+        createdBy: editForm.createdBy,
+        company: editForm.company?.value || "",
+        priority: editForm.priority,
+        dueDate: editForm.dueDate ? new Date(editForm.dueDate).toISOString() : null,
+        status: editForm.status,
+        paid: editForm.paid,
+        rate: editForm.rate === "" ? null : Number(editForm.rate),
+        currency: editForm.currency,
+      };
+
+      const res = await fetch(`/api/tickets/${selectedTicket._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        alert(err?.error || "فشل الحفظ");
+        return;
+      }
+
+      const updated = await res.json();
+
+      // ✅ تحديث محلي
+      setTickets((prev) => prev.map((x) => (x._id === updated._id ? updated : x)));
+      setFiltered((prev) => prev.map((x) => (x._id === updated._id ? updated : x)));
+      setSelectedTicket(updated);
+      setIsEditing(false);
+    } catch (e) {
+      console.error("❌ Save edit error:", e);
+      alert("صار خطأ بالحفظ");
+    } finally {
+      setSaving(false);
+    }
+  };
+  const pageIQD = currentRows.reduce(
+    (sum, t) => (t.currency === "IQD" ? sum + (parseFloat(t.rate) || 0) : sum),
+    0
+  );
+  
+  const pageUSD = currentRows.reduce(
+    (sum, t) => (t.currency === "USD" ? sum + (parseFloat(t.rate) || 0) : sum),
+    0
+  );
   return (
     <div className="min-h-screen w-full bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 p-4">
       {/* Header */}
@@ -270,7 +349,6 @@ export default function ReportPage() {
             value={filterDateFrom}
             onChange={(e) => setFilterDateFrom(e.target.value)}
           />
-
           <input
             type="date"
             className="border rounded-md px-2 py-1 text-xs"
@@ -284,6 +362,62 @@ export default function ReportPage() {
           >
             Export Excel
           </button>
+        </div>
+      </div>
+
+      {/* ✅ Pagination controls (added) */}
+      <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+        <div className="text-xs text-gray-700">
+          Page <b>{currentPage}</b> / <b>{totalPages}</b> — Rows: <b>{filtered.length}</b>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <button
+            onClick={prevPage}
+            disabled={currentPage <= 1 || loading}
+            className="px-2 py-1 rounded border bg-white text-xs disabled:opacity-50"
+          >
+            ◀ Prev
+          </button>
+
+          <div className="flex items-center gap-1">
+            {getPageNumbers().map((p, idx) =>
+              p === "..." ? (
+                <span key={`dots-${idx}`} className="px-2 text-xs text-gray-500">
+                  ...
+                </span>
+              ) : (
+                <button
+                  key={p}
+                  onClick={() => paginate(p)}
+                  disabled={loading}
+                  className={`px-2 py-1 rounded border text-xs ${
+                    p === currentPage ? "bg-gray-800 text-white border-gray-800" : "bg-white text-gray-800"
+                  }`}
+                >
+                  {p}
+                </button>
+              )
+            )}
+          </div>
+
+          <button
+            onClick={nextPage}
+            disabled={currentPage >= totalPages || loading}
+            className="px-2 py-1 rounded border bg-white text-xs disabled:opacity-50"
+          >
+            Next ▶
+          </button>
+
+          <input
+            type="number"
+            min={1}
+            max={totalPages}
+            value={currentPage}
+            onChange={(e) => paginate(Number(e.target.value || 1))}
+            className="w-20 px-2 py-1 rounded border text-xs bg-white"
+            disabled={loading}
+          />
         </div>
       </div>
 
@@ -325,15 +459,15 @@ export default function ReportPage() {
             </thead>
 
             <motion.tbody
-              className="divide-y divide-gray-200"
-              key={filtered.length}
-              initial="hidden"
-              animate="show"
-              variants={{
-                hidden: { opacity: 0 },
-                show: { opacity: 1, transition: { staggerChildren: 0.05 } },
-              }}
-            >
+  className="divide-y divide-gray-200"
+  key={`${currentPage}-${filtered.length}`}   // ✅ مهم
+  initial="hidden"
+  animate="show"
+  variants={{
+    hidden: { opacity: 0 },
+    show: { opacity: 1, transition: { staggerChildren: 0.05 } },
+  }}
+>
               {currentRows.map((t) => (
                 <motion.tr
                   key={t._id}
@@ -343,11 +477,7 @@ export default function ReportPage() {
                   }}
                   transition={{ duration: 0.3 }}
                   className="hover:bg-gray-100 even:bg-gray-50 cursor-pointer transition-colors"
-                  onClick={() => {
-                    setSelectedTicket(t);
-                    setIsEditing(false);
-                    fillEditFormFromTicket(t);
-                  }}
+                  onClick={() => openTicket(t)}
                 >
                   <td className="px-4 py-2 border border-gray-200">{t.title}</td>
                   <td className="px-4 py-2 border border-gray-200 whitespace-pre-wrap break-words">
@@ -357,14 +487,12 @@ export default function ReportPage() {
                   <td className="px-4 py-2 border border-gray-200">{t.createdBy}</td>
                   <td className="px-4 py-2 border border-gray-200">{t.company || "—"}</td>
                   <td className="px-4 py-2 border border-gray-200">{t.priority}</td>
-                  <td className="px-4 py-2 border border-gray-200">
-                    {t.dueDate ? String(t.dueDate).slice(0, 10) : "—"}
-                  </td>
+                  <td className="px-4 py-2 border border-gray-200">{t.dueDate?.slice(0, 10) || "—"}</td>
                   <td className="px-4 py-2 border border-gray-200">
                     {t.doneAt ? new Date(t.doneAt).toLocaleString() : "—"}
                   </td>
 
-                  {/* ✅ Status toggle from table */}
+                  {/* Status */}
                   <td
                     onClick={async (e) => {
                       e.stopPropagation();
@@ -376,36 +504,23 @@ export default function ReportPage() {
                       });
                       if (res.ok) {
                         const updated = await res.json();
-                        setTickets((prev) =>
-                          prev.map((ticket) => (ticket._id === updated._id ? updated : ticket))
-                        );
-                        setFiltered((prev) =>
-                          prev.map((ticket) => (ticket._id === updated._id ? updated : ticket))
-                        );
-                        if (selectedTicket?._id === updated._id) {
-                          setSelectedTicket(updated);
-                          fillEditFormFromTicket(updated);
-                        }
+                        setTickets((prev) => prev.map((x) => (x._id === updated._id ? updated : x)));
+                        setFiltered((prev) => prev.map((x) => (x._id === updated._id ? updated : x)));
                       }
                     }}
                     className="px-4 py-2 border border-gray-200 font-semibold text-center cursor-pointer transition hover:bg-gray-200"
                   >
                     {t.status === "done" ? (
-                      <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
-                        Done
-                      </span>
+                      <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Done</span>
                     ) : (
-                      <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">
-                        Open
-                      </span>
+                      <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">Open</span>
                     )}
                   </td>
 
-                  {/* ✅ Paid toggle from table */}
+                  {/* Paid */}
                   <td
                     onClick={async (e) => {
                       e.stopPropagation();
-                      if (!isAdmin(currentUser)) return;
                       if (t.paid === "yes") {
                         alert("❌ لا يمكن التراجع بعد وضع الحالة على Yes.");
                         return;
@@ -417,16 +532,8 @@ export default function ReportPage() {
                       });
                       if (res.ok) {
                         const updated = await res.json();
-                        setTickets((prev) =>
-                          prev.map((ticket) => (ticket._id === updated._id ? updated : ticket))
-                        );
-                        setFiltered((prev) =>
-                          prev.map((ticket) => (ticket._id === updated._id ? updated : ticket))
-                        );
-                        if (selectedTicket?._id === updated._id) {
-                          setSelectedTicket(updated);
-                          fillEditFormFromTicket(updated);
-                        }
+                        setTickets((prev) => prev.map((x) => (x._id === updated._id ? updated : x)));
+                        setFiltered((prev) => prev.map((x) => (x._id === updated._id ? updated : x)));
                       }
                     }}
                     className={`px-4 py-2 border border-gray-200 font-semibold text-center transition ${
@@ -438,28 +545,24 @@ export default function ReportPage() {
                     }`}
                   >
                     {t.paid === "yes" ? (
-                      <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
-                        Yes
-                      </span>
+                      <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Yes</span>
                     ) : (
-                      <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">
-                        No
-                      </span>
+                      <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">No</span>
                     )}
                   </td>
 
-                  {/* ✅ Rate */}
+                  {/* Rate */}
                   <td className="px-4 py-2 border border-gray-200">
                     {t.rate ? (
                       <span>
-                        {Number(t.rate).toLocaleString()} <span className="ml-1">{t.currency}</span>
+                        {Number(t.rate || 0).toLocaleString()} <span className="ml-1">{t.currency}</span>
                       </span>
                     ) : (
                       "—"
                     )}
                   </td>
 
-                  {/* ✅ Delete */}
+                  {/* Delete */}
                   {isAdmin(currentUser) && (
                     <td
                       onClick={async (e) => {
@@ -467,9 +570,8 @@ export default function ReportPage() {
                         if (confirm("هل تريد بالتأكيد حذف هذا التكت؟")) {
                           const res = await fetch(`/api/tickets/${t._id}`, { method: "DELETE" });
                           if (res.ok) {
-                            setTickets((prev) => prev.filter((ticket) => ticket._id !== t._id));
-                            setFiltered((prev) => prev.filter((ticket) => ticket._id !== t._id));
-                            if (selectedTicket?._id === t._id) setSelectedTicket(null);
+                            setTickets((prev) => prev.filter((x) => x._id !== t._id));
+                            setFiltered((prev) => prev.filter((x) => x._id !== t._id));
                           } else {
                             alert("فشل الحذف");
                           }
@@ -484,79 +586,32 @@ export default function ReportPage() {
               ))}
             </motion.tbody>
 
-            {/* Footer totals */}
             <tfoot className="bg-gray-700 font-semibold text-white">
-              <tr>
-                <td colSpan="10" className="text-right px-4 py-3 border border-gray-600">
-                  Subtotal IQD:
-                </td>
-                <td className="px-4 py-3 border border-gray-600 text-right">
-                  {(
-                    filterUser ||
-                    filterCompany ||
-                    filterPaid ||
-                    filterStatus ||
-                    filterDateFrom ||
-                    filterDateTo
-                      ? filteredIQD
-                      : totalIQD
-                  ).toLocaleString()}{" "}
-                  IQD
-                </td>
-                <td className="border border-gray-600"></td>
-              </tr>
-              <tr>
-                <td colSpan="10" className="text-right px-4 py-3 border border-gray-600">
-                  Subtotal USD:
-                </td>
-                <td className="px-4 py-3 border border-gray-600 text-right">
-                  {(
-                    filterUser ||
-                    filterCompany ||
-                    filterPaid ||
-                    filterStatus ||
-                    filterDateFrom ||
-                    filterDateTo
-                      ? filteredUSD
-                      : totalUSD
-                  ).toLocaleString()}{" "}
-                  USD
-                </td>
-                <td className="border border-gray-600"></td>
-              </tr>
-            </tfoot>
+  <tr>
+    <td colSpan="10" className="text-right px-4 py-3 border border-gray-600">
+      Page Subtotal IQD:
+    </td>
+    <td className="px-4 py-3 border border-gray-600 text-right">
+      {pageIQD.toLocaleString()} IQD
+    </td>
+    <td className="border border-gray-600"></td>
+  </tr>
+
+  <tr>
+    <td colSpan="10" className="text-right px-4 py-3 border border-gray-600">
+      Page Subtotal USD:
+    </td>
+    <td className="px-4 py-3 border border-gray-600 text-right">
+      {pageUSD.toLocaleString()} USD
+    </td>
+    <td className="border border-gray-600"></td>
+  </tr>
+</tfoot>
           </motion.table>
-
-          {/* ✅ Pagination (اختياري بسيط) */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between p-3">
-              <div className="text-xs text-gray-600">
-                Page {currentPage} / {totalPages} • Rows: {filtered.length.toLocaleString()}
-              </div>
-
-              <div className="flex gap-1 flex-wrap">
-                <button
-                  className="px-2 py-1 text-xs border rounded hover:bg-gray-50"
-                  onClick={() => paginate(Math.max(1, currentPage - 1))}
-                  disabled={currentPage === 1}
-                >
-                  Prev
-                </button>
-
-                <button
-                  className="px-2 py-1 text-xs border rounded hover:bg-gray-50"
-                  onClick={() => paginate(Math.min(totalPages, currentPage + 1))}
-                  disabled={currentPage === totalPages}
-                >
-                  Next
-                </button>
-              </div>
-            </div>
-          )}
         </div>
       )}
 
-      {/* Popup */}
+      {/* Popup (✅ now with Edit) */}
       {selectedTicket && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
           <motion.div
@@ -568,152 +623,165 @@ export default function ReportPage() {
           >
             <div className="bg-gradient-to-r from-gray-800 via-gray-700 to-gray-900 px-6 py-3 flex justify-between items-center">
               <h2 className="text-lg font-semibold text-white">Ticket Details</h2>
+              <button
+                onClick={() => {
+                  setSelectedTicket(null);
+                  setIsEditing(false);
+                  setSaving(false);
+                }}
+                className="text-gray-300 hover:text-white transition"
+              >
+                ✕
+              </button>
+            </div>
 
-              <div className="flex items-center gap-2">
-                {isAdmin(currentUser) && (
-                  <>
-                    {!isEditing ? (
-                      <button
-                        onClick={() => setIsEditing(true)}
-                        className="px-3 py-1 text-xs rounded bg-white/10 text-white hover:bg-white/20"
-                      >
-                        Edit
-                      </button>
-                    ) : (
-                      <>
-                        <button
-                          onClick={saveEdits}
-                          className="px-3 py-1 text-xs rounded bg-green-600 text-white hover:bg-green-700"
-                        >
-                          Save
-                        </button>
-                        <button
-                          onClick={() => {
-                            fillEditFormFromTicket(selectedTicket);
-                            setIsEditing(false);
-                          }}
-                          className="px-3 py-1 text-xs rounded bg-gray-400 text-gray-900 hover:bg-gray-300"
-                        >
-                          Cancel
-                        </button>
-                      </>
-                    )}
-                  </>
-                )}
-
-                <button
-                  onClick={() => {
-                    setSelectedTicket(null);
-                    setIsEditing(false);
-                  }}
-                  className="text-gray-300 hover:text-white transition"
-                >
-                  ✕
-                </button>
+            {/* Actions */}
+            <div className="px-6 py-3 border-b bg-gray-50 flex items-center justify-between">
+              <div className="text-xs text-gray-600">
+                {canEditTicket(selectedTicket) ? "تقدر تعدّل من هنا" : "عرض فقط (ما عندك صلاحية تعديل)"}
               </div>
+
+              {canEditTicket(selectedTicket) && (
+                <div className="flex items-center gap-2">
+                  {!isEditing ? (
+                    <button
+                      onClick={() => setIsEditing(true)}
+                      className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                    >
+                      Edit
+                    </button>
+                  ) : (
+                    <>
+                      <button
+                        onClick={() => {
+                          openTicket(selectedTicket); // يرجّع فورم على آخر نسخة
+                          setIsEditing(false);
+                        }}
+                        className="px-3 py-1.5 text-xs bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
+                        disabled={saving}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        onClick={saveEdits}
+                        className="px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-60"
+                        disabled={saving}
+                      >
+                        {saving ? "Saving..." : "Save"}
+                      </button>
+                    </>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="p-6 text-sm text-gray-800 grid grid-cols-2 gap-4">
               {/* Title */}
               <div className="border rounded-lg p-3 col-span-2">
                 <h3 className="text-xs text-gray-500">Title</h3>
-                {!isEditing ? (
-                  <p className="font-medium">{selectedTicket.title}</p>
-                ) : (
+                {isEditing ? (
                   <input
-                    className="w-full mt-1 border rounded px-2 py-1 text-sm"
+                    className="mt-1 w-full border rounded px-2 py-1 text-sm"
                     value={editForm.title}
-                    onChange={(e) => onEditChange("title", e.target.value)}
+                    onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))}
                   />
+                ) : (
+                  <p className="font-medium">{selectedTicket.title}</p>
                 )}
               </div>
 
               {/* Description */}
               <div className="border rounded-lg p-3 col-span-2">
                 <h3 className="text-xs text-gray-500">Description</h3>
-                {!isEditing ? (
-                  <p className="font-medium whitespace-pre-wrap break-words">
-                    {selectedTicket.description}
-                  </p>
-                ) : (
+                {isEditing ? (
                   <textarea
-                    className="w-full mt-1 border rounded px-2 py-2 text-sm min-h-[120px]"
+                    className="mt-1 w-full min-h-[120px] border rounded px-2 py-1 text-sm whitespace-pre-wrap"
                     value={editForm.description}
-                    onChange={(e) => onEditChange("description", e.target.value)}
+                    onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))}
                   />
+                ) : (
+                  <p className="font-medium whitespace-pre-wrap break-words">{selectedTicket.description}</p>
                 )}
               </div>
 
               {/* Assigned To */}
               <div className="border rounded-lg p-3">
                 <h3 className="text-xs text-gray-500">Assigned To</h3>
-                {!isEditing ? (
-                  <p className="font-medium">{selectedTicket.assignedTo}</p>
-                ) : (
-                  <input
-                    className="w-full mt-1 border rounded px-2 py-1 text-sm"
+                {isEditing ? (
+                  <Select
+                    options={userOptions}
                     value={editForm.assignedTo}
-                    onChange={(e) => onEditChange("assignedTo", e.target.value)}
-                    placeholder="Assigned To..."
+                    onChange={(v) => setEditForm((p) => ({ ...p, assignedTo: v }))}
+                    placeholder="Select user..."
+                    isClearable
+                    className="mt-1 text-xs"
                   />
+                ) : (
+                  <p className="font-medium">{selectedTicket.assignedTo}</p>
                 )}
               </div>
 
-              {/* Created By (قراءة فقط) */}
+              {/* Created By */}
               <div className="border rounded-lg p-3">
                 <h3 className="text-xs text-gray-500">Created By</h3>
-                <p className="font-medium">{selectedTicket.createdBy}</p>
+                {isEditing ? (
+                  <input
+                    className="mt-1 w-full border rounded px-2 py-1 text-sm"
+                    value={editForm.createdBy}
+                    onChange={(e) => setEditForm((p) => ({ ...p, createdBy: e.target.value }))}
+                  />
+                ) : (
+                  <p className="font-medium">{selectedTicket.createdBy}</p>
+                )}
               </div>
 
               {/* Company */}
               <div className="border rounded-lg p-3">
                 <h3 className="text-xs text-gray-500">Company</h3>
-                {!isEditing ? (
-                  <p className="font-medium">{selectedTicket.company || "—"}</p>
-                ) : (
-                  <input
-                    className="w-full mt-1 border rounded px-2 py-1 text-sm"
+                {isEditing ? (
+                  <Select
+                    options={companyOptions}
                     value={editForm.company}
-                    onChange={(e) => onEditChange("company", e.target.value)}
-                    placeholder="Company..."
+                    onChange={(v) => setEditForm((p) => ({ ...p, company: v }))}
+                    placeholder="Select company..."
+                    isClearable
+                    className="mt-1 text-xs"
                   />
+                ) : (
+                  <p className="font-medium">{selectedTicket.company || "—"}</p>
                 )}
               </div>
 
               {/* Priority */}
               <div className="border rounded-lg p-3">
                 <h3 className="text-xs text-gray-500">Priority</h3>
-                {!isEditing ? (
-                  <p className="font-medium">{selectedTicket.priority}</p>
-                ) : (
-                  <select
-                    className="w-full mt-1 border rounded px-2 py-1 text-sm"
+                {isEditing ? (
+                  <input
+                    className="mt-1 w-full border rounded px-2 py-1 text-sm"
                     value={editForm.priority}
-                    onChange={(e) => onEditChange("priority", e.target.value)}
-                  >
-                    <option value="low">low</option>
-                    <option value="medium">medium</option>
-                    <option value="high">high</option>
-                  </select>
+                    onChange={(e) => setEditForm((p) => ({ ...p, priority: e.target.value }))}
+                  />
+                ) : (
+                  <p className="font-medium">{selectedTicket.priority}</p>
                 )}
               </div>
 
               {/* Due Date */}
               <div className="border rounded-lg p-3">
                 <h3 className="text-xs text-gray-500">Due Date</h3>
-                {!isEditing ? (
-                  <p className="font-medium">{selectedTicket.dueDate ? String(selectedTicket.dueDate).slice(0, 10) : "—"}</p>
-                ) : (
+                {isEditing ? (
                   <input
                     type="date"
-                    className="w-full mt-1 border rounded px-2 py-1 text-sm"
+                    className="mt-1 w-full border rounded px-2 py-1 text-sm"
                     value={editForm.dueDate}
-                    onChange={(e) => onEditChange("dueDate", e.target.value)}
+                    onChange={(e) => setEditForm((p) => ({ ...p, dueDate: e.target.value }))}
                   />
+                ) : (
+                  <p className="font-medium">{selectedTicket.dueDate?.slice(0, 10) || "—"}</p>
                 )}
               </div>
 
-              {/* Done At (قراءة فقط) */}
+              {/* Done At */}
               <div className="border rounded-lg p-3">
                 <h3 className="text-xs text-gray-500">Done At</h3>
                 <p className="font-medium">
@@ -724,75 +792,103 @@ export default function ReportPage() {
               {/* Status */}
               <div className="border rounded-lg p-3">
                 <h3 className="text-xs text-gray-500">Status</h3>
-                {!isEditing ? (
-                  <p className="font-medium">{selectedTicket.status}</p>
+                {isEditing ? (
+                  <Select
+                    options={[
+                      { value: "open", label: "Open" },
+                      { value: "done", label: "Done" },
+                    ]}
+                    value={{
+                      value: editForm.status,
+                      label: editForm.status === "done" ? "Done" : "Open",
+                    }}
+                    onChange={(v) => setEditForm((p) => ({ ...p, status: v?.value || "open" }))}
+                    className="mt-1 text-xs"
+                  />
                 ) : (
-                  <select
-                    className="w-full mt-1 border rounded px-2 py-1 text-sm"
-                    value={editForm.status}
-                    onChange={(e) => onEditChange("status", e.target.value)}
-                  >
-                    <option value="open">open</option>
-                    <option value="done">done</option>
-                  </select>
+                  <p className="font-medium">
+                    {selectedTicket.status === "done" ? (
+                      <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Done</span>
+                    ) : (
+                      <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">Open</span>
+                    )}
+                  </p>
                 )}
               </div>
 
               {/* Paid */}
               <div className="border rounded-lg p-3">
                 <h3 className="text-xs text-gray-500">Paid</h3>
-                {!isEditing ? (
-                  <p className="font-medium">{selectedTicket.paid}</p>
+                {isEditing ? (
+                  <Select
+                    options={[
+                      { value: "yes", label: "Yes" },
+                      { value: "no", label: "No" },
+                    ]}
+                    value={{
+                      value: editForm.paid,
+                      label: editForm.paid === "yes" ? "Yes" : "No",
+                    }}
+                    onChange={(v) => setEditForm((p) => ({ ...p, paid: v?.value || "no" }))}
+                    className="mt-1 text-xs"
+                  />
                 ) : (
-                  <select
-                    className="w-full mt-1 border rounded px-2 py-1 text-sm"
-                    value={editForm.paid}
-                    onChange={(e) => onEditChange("paid", e.target.value)}
-                  >
-                    <option value="no">no</option>
-                    <option value="yes">yes</option>
-                  </select>
+                  <p className="font-medium">
+                    {selectedTicket.paid === "yes" ? (
+                      <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Yes</span>
+                    ) : (
+                      <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">No</span>
+                    )}
+                  </p>
                 )}
               </div>
 
               {/* Rate + Currency */}
               <div className="border rounded-lg p-3 col-span-2">
                 <h3 className="text-xs text-gray-500">Rate</h3>
-                {!isEditing ? (
-                  <p className="font-medium">
-                    {selectedTicket.rate
-                      ? `${Number(selectedTicket.rate).toLocaleString()} ${selectedTicket.currency || ""}`
-                      : "—"}
-                  </p>
-                ) : (
-                  <div className="flex gap-2 mt-1">
+                {isEditing ? (
+                  <div className="mt-1 flex gap-2">
                     <input
                       type="number"
-                      className="flex-1 border rounded px-2 py-1 text-sm"
+                      className="w-full border rounded px-2 py-1 text-sm"
                       value={editForm.rate}
-                      onChange={(e) => onEditChange("rate", e.target.value)}
+                      onChange={(e) => setEditForm((p) => ({ ...p, rate: e.target.value }))}
                       placeholder="Rate..."
                     />
-                    <select
-                      className="w-28 border rounded px-2 py-1 text-sm"
-                      value={editForm.currency}
-                      onChange={(e) => onEditChange("currency", e.target.value)}
-                    >
-                      <option value="IQD">IQD</option>
-                      <option value="USD">USD</option>
-                    </select>
+                    <Select
+                      options={[
+                        { value: "IQD", label: "IQD" },
+                        { value: "USD", label: "USD" },
+                      ]}
+                      value={{ value: editForm.currency, label: editForm.currency }}
+                      onChange={(v) => setEditForm((p) => ({ ...p, currency: v?.value || "IQD" }))}
+                      className="w-40 text-xs"
+                    />
                   </div>
+                ) : (
+                  <p className="font-medium">
+                    {selectedTicket.rate ? (
+                      <span>
+                        {Number(selectedTicket.rate || 0).toLocaleString()}{" "}
+                        <span className="ml-1">{selectedTicket.currency}</span>
+                      </span>
+                    ) : (
+                      "—"
+                    )}
+                  </p>
                 )}
               </div>
             </div>
 
-            <div className="px-6 py-3 border-t bg-gray-50 flex justify-end gap-2">
+            <div className="px-6 py-3 border-t bg-gray-50 flex justify-end">
               <button
                 onClick={() => {
                   setSelectedTicket(null);
                   setIsEditing(false);
+                  setSaving(false);
                 }}
                 className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+                disabled={saving}
               >
                 Close
               </button>
