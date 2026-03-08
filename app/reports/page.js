@@ -167,27 +167,31 @@ export default function ReportPage() {
 
   // 🟢 excel export
   const exportToExcel = () => {
-    const worksheet = XLSX.utils.json_to_sheet(
-      filtered.map((t) => ({
-        Title: t.title,
-        Description: t.description,
-        "Assigned To": t.assignedTo,
-        "Created By": t.createdBy,
-        Company: t.company || "—",
-        Priority: t.priority,
-        "Due Date": t.dueDate ? String(t.dueDate).slice(0, 10) : "—",
-        "Done At": t.doneAt ? new Date(t.doneAt).toLocaleString() : "—",
-        Status: t.status,
-        Paid: t.paid,
-        Rate: t.rate ? `${Number(t.rate || 0).toLocaleString()}${t.currency || ""}` : "—",
-      }))
-    );
-
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Tickets");
-
-    const excelBuffer = XLSX.utils.write(workbook, { bookType: "xlsx", type: "array" });
-    saveAs(new Blob([excelBuffer], { type: "application/octet-stream" }), `tickets_report.xlsx`);
+    try {
+      const worksheet = XLSX.utils.json_to_sheet(
+        filtered.map((t) => ({
+          Title: t.title || "",
+          Description: t.description || "",
+          "Assigned To": t.assignedTo || "",
+          "Created By": t.createdBy || "",
+          Company: t.company || "—",
+          Priority: t.priority || "",
+          "Due Date": t.dueDate ? String(t.dueDate).slice(0, 10) : "—",
+          "Done At": t.doneAt ? new Date(t.doneAt).toLocaleString() : "—",
+          Status: t.status || "",
+          Paid: t.paid || "",
+          Rate: t.rate ? `${Number(t.rate || 0).toLocaleString()} ${t.currency || ""}` : "—",
+        }))
+      );
+  
+      const workbook = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(workbook, worksheet, "Tickets");
+  
+      XLSX.writeFile(workbook, "tickets_report.xlsx");
+    } catch (err) {
+      console.error("❌ Export Excel error:", err);
+      alert("صار خطأ بتصدير الإكسل");
+    }
   };
 
   // 🧮 totals
