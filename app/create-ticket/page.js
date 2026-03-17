@@ -25,7 +25,7 @@ const [rate, setRate] = useState(""); // 🟢 بالبداية فارغ
 const [currency, setCurrency] = useState("IQD");
 const [isEditing, setIsEditing] = useState(false);
 const [editForm, setEditForm] = useState({});
-
+const [loading, setLoading] = useState(false);
   // 🟢 current user (from permissions.js)
   const [currentUser, setCurrentUser] = useState(null);
   
@@ -134,34 +134,48 @@ const [editForm, setEditForm] = useState({});
   // create ticket
   const handleCreate = async (e) => {
     e.preventDefault();
-    const createdBy = currentUser.username;
-    
-    const res = await fetch("/api/tickets", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        title,
-        description,
-        assignedTo,
-        priority,
-        dueDate,
-        createdBy,
-        company,
-        paid: "no", // default
-        doneAt,
-        rate: rate ? Number(rate.replace(/,/g, "")) : null, // ✅ الرقم
-        currency,
-      }),
-    });
-
-    if (res.ok) {
-      setIsModalOpen(false);
-      setTitle("");
-      setDescription("");
-      setAssignedTo("");
-      setPriority("medium");
-      setDueDate("");
-      fetchTickets();
+  
+    if (loading) return;
+  
+    try {
+      setLoading(true);
+  
+      const createdBy = currentUser.username;
+  
+      const res = await fetch("/api/tickets", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          title,
+          description,
+          assignedTo,
+          priority,
+          dueDate,
+          createdBy,
+          company,
+          paid: "no",
+          doneAt,
+          rate: rate ? Number(rate.replace(/,/g, "")) : null,
+          currency,
+        }),
+      });
+  
+      if (res.ok) {
+        setIsModalOpen(false);
+        setTitle("");
+        setDescription("");
+        setAssignedTo("");
+        setPriority("medium");
+        setDueDate("");
+        setCompany("");
+        setRate("");
+        setCurrency("IQD");
+        fetchTickets();
+      }
+    } catch (err) {
+      console.error("❌ Error creating ticket:", err);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -475,11 +489,13 @@ const [editForm, setEditForm] = useState({});
                   Cancel
                 </button>
                 <button
-                  type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-                >
-                  Create
-                </button>
+  type="submit"
+  disabled={loading}
+  className={`px-4 py-2 text-white rounded-lg transition
+    ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}`}
+>
+  {loading ? "Loading..." : "Create"}
+</button>
               </div>
             </form>
           </motion.div>
