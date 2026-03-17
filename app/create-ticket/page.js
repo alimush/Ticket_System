@@ -211,14 +211,14 @@ const [editForm, setEditForm] = useState({});
       {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-bold text-gray-800">Tickets</h1>
-        {canCreateTicket(currentUser) && (
+        
           <button
             onClick={() => setIsModalOpen(true)}
             className="bg-gray-800 text-white font-medium px-6 py-2 rounded-lg hover:bg-gray-700 transition"
           >
             + Create Ticket
           </button>
-        )}
+
       </div>
       
 
@@ -328,7 +328,7 @@ const [editForm, setEditForm] = useState({});
       </div>
 
       {/* Create Ticket Modal */}
-      {isModalOpen && canCreateTicket(currentUser) && (
+      {isModalOpen && (
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center   p-4">
          <motion.div
   initial={{ y: 40, opacity: 0 }}
@@ -385,12 +385,17 @@ const [editForm, setEditForm] = useState({});
   className="w-full border rounded-lg p-2 bg-gray-50 border-gray-300 text-gray-900"
   value={rate}
   onChange={(e) => {
-    const rawValue = e.target.value.replace(/,/g, ""); // نشيل الفواصل
-    if (rawValue === "") {
-      setRate(""); // فارغ
-    } else if (!isNaN(rawValue)) {
-      setRate(Number(rawValue).toLocaleString()); // نضيف commas
+    let raw = e.target.value.replace(/,/g, "");
+
+    if (raw === "-") {
+      setRate("-");
+      return;
     }
+
+    if (isNaN(raw)) return;
+
+    const num = Number(raw);
+    setRate(num.toLocaleString());
   }}
   placeholder="Enter amount..."
 />

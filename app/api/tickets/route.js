@@ -1,5 +1,6 @@
 import dbConnect from "@/lib/mongodb";
 import Ticket from "@/models/Ticket";
+import { sendTicketEmail } from "@/lib/sendTicketEmail";
 
 export async function GET() {
   try {
@@ -16,8 +17,15 @@ export async function POST(req) {
   try {
     await dbConnect();
     const body = await req.json();
+
     const ticket = await Ticket.create(body);
-    
+
+    try {
+      await sendTicketEmail(ticket);
+    } catch (emailErr) {
+      console.error("❌ Ticket created but email failed:", emailErr);
+    }
+
     return new Response(JSON.stringify(ticket), { status: 201 });
   } catch (err) {
     console.error("❌ Error in POST /api/tickets:", err);

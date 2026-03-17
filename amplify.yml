@@ -1,0 +1,28 @@
+version: 1
+frontend:
+  phases:
+    preBuild:
+      commands:
+        - npm install
+
+        # ================= ENV =================
+        - echo "MONGODB_URI=$MONGODB_URI" >> .env.local
+        - echo "SMTP_HOST=$SMTP_HOST" >> .env.local
+        - echo "SMTP_PORT=$SMTP_PORT" >> .env.local
+        - echo "SMTP_SECURE=$SMTP_SECURE" >> .env.local
+        - echo "SMTP_USER=$SMTP_USER" >> .env.local
+        - echo "SMTP_PASS=$SMTP_PASS" >> .env.local
+
+    build:
+      commands:
+        - npm run build
+
+  artifacts:
+    baseDirectory: .next
+    files:
+      - '**/*'
+
+  cache:
+    paths:
+      - node_modules/**/*
+      - .next/cache/**/*
