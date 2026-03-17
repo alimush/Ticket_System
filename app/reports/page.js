@@ -62,33 +62,45 @@ export default function ReportPage() {
   const fetchTickets = async (user) => {
     try {
       setLoading(true);
-      const res = await fetch("/api/tickets");
-      const data = await res.json();
-
-      if (Array.isArray(data)) {
+  
+      const [ticketsRes, companiesRes] = await Promise.all([
+        fetch("/api/tickets"),
+        fetch("/api/companies"),
+      ]);
+  
+      const ticketsData = await ticketsRes.json();
+      const companiesData = await companiesRes.json();
+  
+      if (Array.isArray(ticketsData)) {
         if (!isAdmin(user)) {
           const userName = user?.name || user?.username || "";
-          const userTickets = data.filter((t) => t.assignedTo === userName);
+          const userTickets = ticketsData.filter((t) => t.assignedTo === userName);
           setTickets(userTickets);
           setFiltered(userTickets);
         } else {
-          setTickets(data);
-          setFiltered(data);
+          setTickets(ticketsData);
+          setFiltered(ticketsData);
         }
-
-        const uniqueUsers = [...new Set(data.map((t) => t.assignedTo).filter(Boolean))];
+  
+        const uniqueUsers = [...new Set(ticketsData.map((t) => t.assignedTo).filter(Boolean))];
         setUserOptions(uniqueUsers.map((u) => ({ value: u, label: u })));
-
-        const uniqueCompanies = [...new Set(data.map((t) => t.company).filter(Boolean))];
-        setCompanyOptions(uniqueCompanies.map((c) => ({ value: c, label: c })));
+      }
+  
+      // ✅ الشركات تجي من جدول الشركات نفسه
+      if (Array.isArray(companiesData)) {
+        setCompanyOptions(
+          companiesData.map((c) => ({
+            value: c.name,
+            label: c.name,
+          }))
+        );
       }
     } catch (err) {
-      console.error("❌ Error fetching tickets:", err);
+      console.error("❌ Error fetching tickets/companies:", err);
     } finally {
       setLoading(false);
     }
   };
-
   useEffect(() => {
     if (typeof window === "undefined") return;
     const user = getCurrentUser();

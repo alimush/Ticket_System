@@ -9,10 +9,9 @@ export default function CompaniesPage() {
   const [editingId, setEditingId] = useState(null);
   const [editName, setEditName] = useState("");
 
-  // 🟢 Fetch companies
   const fetchCompanies = async () => {
     try {
-      const res = await fetch("/api/companies");
+      const res = await fetch("/api/companies", { cache: "no-store" });
       const data = await res.json();
       setCompanies(Array.isArray(data) ? data : []);
     } catch (err) {
@@ -24,7 +23,6 @@ export default function CompaniesPage() {
     fetchCompanies();
   }, []);
 
-  // 🟢 Add new company
   const handleAdd = async (e) => {
     e.preventDefault();
     setError("");
@@ -36,6 +34,7 @@ export default function CompaniesPage() {
     });
 
     const data = await res.json();
+
     if (!res.ok) {
       setError(data.error || "Failed to add company");
       return;
@@ -45,7 +44,6 @@ export default function CompaniesPage() {
     fetchCompanies();
   };
 
-  // 🟡 Update company
   const handleUpdate = async (id) => {
     const res = await fetch(`/api/companies/${id}`, {
       method: "PATCH",
@@ -53,35 +51,36 @@ export default function CompaniesPage() {
       body: JSON.stringify({ name: editName }),
     });
 
+    const data = await res.json();
+
     if (res.ok) {
       setEditingId(null);
       setEditName("");
       fetchCompanies();
     } else {
-      alert("❌ Failed to update company");
+      alert(data.error || "❌ Failed to update company");
     }
   };
 
-  // 🔴 Delete company
   const handleDelete = async (id) => {
     if (!confirm("هل تريد حذف هذه الشركة؟")) return;
 
     const res = await fetch(`/api/companies/${id}`, { method: "DELETE" });
+    const data = await res.json();
+
     if (res.ok) {
       fetchCompanies();
     } else {
-      alert("❌ Failed to delete company");
+      alert(data.error || "❌ Failed to delete company");
     }
   };
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 p-6">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-xl font-bold text-gray-800">Companies</h1>
       </div>
 
-      {/* Add Form */}
       <form onSubmit={handleAdd} className="flex gap-2 mb-6">
         <input
           type="text"
@@ -101,7 +100,6 @@ export default function CompaniesPage() {
 
       {error && <p className="text-red-600 mb-4 text-sm">{error}</p>}
 
-      {/* Companies List */}
       <ul className="bg-white rounded-lg shadow-md divide-y">
         <AnimatePresence>
           {companies.map((c, index) => (

@@ -9,7 +9,10 @@ export async function GET() {
     return NextResponse.json(companies, { status: 200 });
   } catch (err) {
     console.error("❌ Error fetching companies:", err);
-    return NextResponse.json({ error: "Failed to fetch companies" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to fetch companies" },
+      { status: 500 }
+    );
   }
 }
 
@@ -18,19 +21,27 @@ export async function POST(req) {
     await dbConnect();
     const { name } = await req.json();
 
-    if (!name) {
+    if (!name || !name.trim()) {
       return NextResponse.json({ error: "Name is required" }, { status: 400 });
     }
 
-    const exists = await Company.findOne({ name });
+    const cleanName = name.trim();
+
+    const exists = await Company.findOne({ name: cleanName });
     if (exists) {
-      return NextResponse.json({ error: "Company already exists" }, { status: 400 });
+      return NextResponse.json(
+        { error: "Company already exists" },
+        { status: 400 }
+      );
     }
 
-    const company = await Company.create({ name });
+    const company = await Company.create({ name: cleanName });
     return NextResponse.json(company, { status: 201 });
   } catch (err) {
     console.error("❌ Error creating company:", err);
-    return NextResponse.json({ error: "Failed to create company" }, { status: 500 });
+    return NextResponse.json(
+      { error: "Failed to create company" },
+      { status: 500 }
+    );
   }
 }
