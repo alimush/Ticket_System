@@ -5,7 +5,7 @@ const TicketSchema = new mongoose.Schema(
   {
     title: { type: String, required: true },
     description: { type: String, default: "" },
-    assignedTo: { type: String, required: true },
+    assignedTo: { type: String, default: null, trim: true },
     priority: {
       type: String,
       enum: ["low", "medium", "high"],

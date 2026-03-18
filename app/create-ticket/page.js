@@ -148,7 +148,7 @@ const [loading, setLoading] = useState(false);
         body: JSON.stringify({
           title,
           description,
-          assignedTo,
+          assignedTo: assignedTo || null,
           priority,
           dueDate,
           createdBy,
@@ -289,7 +289,7 @@ const [loading, setLoading] = useState(false);
            {/* معلومات */}
            <p className="text-sm font-bold">
              Assigned To:{" "}
-             <span className="font-normal text-gray-700">{ticket.assignedTo}</span>
+             <span className="font-normal text-gray-700">{ticket.assignedTo || "—"}</span>
            </p>
            <p className="text-sm font-bold">
              Company:{" "}
@@ -382,7 +382,7 @@ const [loading, setLoading] = useState(false);
                   className="w-full border rounded-lg p-2 bg-gray-50 border-gray-300 text-gray-900"
                   value={assignedTo}
                   onChange={(e) => setAssignedTo(e.target.value)}
-                  required
+                  
                 >
                   <option value="">Select user</option>
                   {users.map((user) => (
@@ -559,7 +559,7 @@ const [loading, setLoading] = useState(false);
                 }
               />
             ) : (
-              <p className="font-medium">{selectedTicket.assignedTo}</p>
+              <p className="font-medium">{selectedTicket.assignedTo || "—"}</p>
             )}
           </div>
 
@@ -754,7 +754,10 @@ const [loading, setLoading] = useState(false);
                 const res = await fetch(`/api/tickets/${selectedTicket._id}`, {
                   method: "PATCH",
                   headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify(editForm),
+                  body: JSON.stringify({
+                    ...editForm,
+                    assignedTo: editForm.assignedTo || null,
+                  }),
                 });
                 if (res.ok) {
                   const updated = await res.json();
