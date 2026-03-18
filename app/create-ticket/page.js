@@ -48,7 +48,8 @@ const [loading, setLoading] = useState(false);
   const [assignedTo, setAssignedTo] = useState("");
   const [priority, setPriority] = useState("medium");
   const [dueDate, setDueDate] = useState("");
-
+  const isBayan =
+  (currentUser?.username || currentUser?.name || "").toLowerCase() === "bayan";
   // fetch tickets
   const fetchTickets = async () => {
     const res = await fetch("/api/tickets");
@@ -155,7 +156,7 @@ const [loading, setLoading] = useState(false);
           company,
           paid: "no",
           doneAt,
-          rate: rate ? Number(rate.replace(/,/g, "")) : null,
+          rate: isBayan ? null : rate ? Number(rate.replace(/,/g, "")) : null,
           currency,
         }),
       });
@@ -396,9 +397,15 @@ const [loading, setLoading] = useState(false);
   <label className="block text-gray-700 mb-1">Rate</label>
   <input
   type="text"
-  className="w-full border rounded-lg p-2 bg-gray-50 border-gray-300 text-gray-900"
-  value={rate}
+  className={`w-full border rounded-lg p-2 ${
+    isBayan
+      ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
+      : "bg-gray-50 border-gray-300 text-gray-900"
+  }`}
+  value={isBayan ? "*****" : rate}
   onChange={(e) => {
+    if (isBayan) return;
+
     let raw = e.target.value.replace(/,/g, "");
 
     if (raw === "-") {
@@ -411,17 +418,27 @@ const [loading, setLoading] = useState(false);
     const num = Number(raw);
     setRate(num.toLocaleString());
   }}
-  placeholder="Enter amount..."
+  placeholder={isBayan ? "No access" : "Enter amount..."}
+  disabled={isBayan}
+  readOnly={isBayan}
 />
 </div>
              
   <div>
     <label className="block text-gray-700 mb-1">Currency</label>
     <select
-      className="w-full border rounded-lg p-2 bg-gray-50 border-gray-300 text-gray-900"
-      value={currency}
-      onChange={(e) => setCurrency(e.target.value)}
-    >
+  className={`w-full border rounded-lg p-2 ${
+    isBayan
+      ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
+      : "bg-gray-50 border-gray-300 text-gray-900"
+  }`}
+  value={currency}
+  onChange={(e) => {
+    if (isBayan) return;
+    setCurrency(e.target.value);
+  }}
+  disabled={isBayan}
+>
       <option value="USD">USD</option>
       <option value="IQD">IQD</option>
 
@@ -640,22 +657,27 @@ const [loading, setLoading] = useState(false);
         <div className="border rounded-lg p-3">
           <h3 className="text-xs text-gray-500">Rate</h3>
           {isEditing ? (
-            <input
-              type="text"
-              className="w-full border rounded p-1"
-              value={editForm.rate || ""}
-              onChange={(e) =>
-                setEditForm({ ...editForm, rate: e.target.value })
-              }
-            />
+       <input
+       type="text"
+       className={`w-full border rounded p-1 ${
+         isBayan ? "bg-gray-100 text-gray-400 cursor-not-allowed" : ""
+       }`}
+       value={isBayan ? "*****" : editForm.rate || ""}
+       onChange={(e) => {
+         if (isBayan) return;
+         setEditForm({ ...editForm, rate: e.target.value });
+       }}
+       disabled={isBayan}
+       readOnly={isBayan}
+     />
           ) : (
             <p className="font-medium">
-              {selectedTicket.rate
-                ? `${selectedTicket.rate.toLocaleString()} ${
-                    selectedTicket.currency || ""
-                  }`
-                : "—"}
-            </p>
+            {isBayan
+              ? "*****"
+              : selectedTicket.rate
+              ? `${selectedTicket.rate.toLocaleString()} ${selectedTicket.currency || ""}`
+              : "—"}
+          </p>
           )}
         </div>
 
@@ -757,6 +779,7 @@ const [loading, setLoading] = useState(false);
                   body: JSON.stringify({
                     ...editForm,
                     assignedTo: editForm.assignedTo || null,
+                    rate: isBayan ? selectedTicket.rate ?? null : editForm.rate,
                   }),
                 });
                 if (res.ok) {

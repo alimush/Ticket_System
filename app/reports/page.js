@@ -28,6 +28,8 @@ export default function ReportPage() {
   const [userOptions, setUserOptions] = useState([]);
   const [companyOptions, setCompanyOptions] = useState([]);
   const [loading, setLoading] = useState(true);
+  const isBayan =
+  (currentUser?.username || currentUser?.name || "").toLowerCase() === "bayan";
 
   // =========================
   // ✅ Popup Edit State
@@ -73,8 +75,19 @@ export default function ReportPage() {
   
       if (Array.isArray(ticketsData)) {
         if (!isAdmin(user)) {
-          const userName = user?.name || user?.username || "";
-          const userTickets = ticketsData.filter((t) => t.assignedTo === userName);
+          const userName = (user?.name || user?.username || "").toLowerCase();
+        
+          const userTickets = ticketsData.filter((t) => {
+            const assignedTo = (t.assignedTo || "").toLowerCase();
+            const createdBy = (t.createdBy || "").toLowerCase();
+        
+            if (userName === "bayan") {
+              return assignedTo === userName || createdBy === userName;
+            }
+        
+            return assignedTo === userName;
+          });
+        
           setTickets(userTickets);
           setFiltered(userTickets);
         } else {
@@ -192,7 +205,11 @@ export default function ReportPage() {
           "Done At": t.doneAt ? new Date(t.doneAt).toLocaleString() : "—",
           Status: t.status || "",
           Paid: t.paid || "",
-          Rate: t.rate ? `${Number(t.rate || 0).toLocaleString()} ${t.currency || ""}` : "—",
+          Rate: isBayan
+          ? "*****"
+          : t.rate
+          ? `${Number(t.rate || 0).toLocaleString()} ${t.currency || ""}`
+          : "—",
         }))
       );
   
@@ -269,8 +286,12 @@ export default function ReportPage() {
         dueDate: editForm.dueDate ? new Date(editForm.dueDate).toISOString() : null,
         status: editForm.status,
         paid: editForm.paid,
-        rate: editForm.rate === "" ? null : Number(editForm.rate),
-        currency: editForm.currency,
+        rate: isBayan
+        ? selectedTicket.rate ?? null
+        : editForm.rate === ""
+        ? null
+        : Number(editForm.rate),
+      currency: isBayan ? selectedTicket.currency || "IQD" : editForm.currency,
       };
 
       const res = await fetch(`/api/tickets/${selectedTicket._id}`, {
@@ -569,14 +590,16 @@ export default function ReportPage() {
 
                   {/* Rate */}
                   <td className="px-4 py-2 border border-gray-200">
-                    {t.rate ? (
-                      <span>
-                        {Number(t.rate || 0).toLocaleString()} <span className="ml-1">{t.currency}</span>
-                      </span>
-                    ) : (
-                      "—"
-                    )}
-                  </td>
+  {isBayan
+    ? "*****"
+    : t.rate ? (
+        <span>
+          {Number(t.rate || 0).toLocaleString()} <span className="ml-1">{t.currency}</span>
+        </span>
+      ) : (
+        "—"
+      )}
+</td>
 
                   {/* Delete */}
                   {isAdmin(currentUser) && (
@@ -733,7 +756,7 @@ export default function ReportPage() {
                     className="mt-1 text-xs"
                   />
                 ) : (
-                  <p className="font-medium">{selectedTicket.assignedTo}</p>
+                  <p className="font-medium">{selectedTicket.assignedTo || "—"}</p>
                 )}
               </div>
 
@@ -864,34 +887,47 @@ export default function ReportPage() {
                 <h3 className="text-xs text-gray-500">Rate</h3>
                 {isEditing ? (
                   <div className="mt-1 flex gap-2">
-                    <input
-                      type="number"
-                      className="w-full border rounded px-2 py-1 text-sm"
-                      value={editForm.rate}
-                      onChange={(e) => setEditForm((p) => ({ ...p, rate: e.target.value }))}
-                      placeholder="Rate..."
-                    />
-                    <Select
-                      options={[
-                        { value: "IQD", label: "IQD" },
-                        { value: "USD", label: "USD" },
-                      ]}
-                      value={{ value: editForm.currency, label: editForm.currency }}
-                      onChange={(v) => setEditForm((p) => ({ ...p, currency: v?.value || "IQD" }))}
-                      className="w-40 text-xs"
-                    />
+                <input
+  type="text"
+  className={`w-full border rounded px-2 py-1 text-sm ${
+    isBayan ? "bg-gray-100 text-gray-400 cursor-not-allowed" : ""
+  }`}
+  value={isBayan ? "*****" : editForm.rate}
+  onChange={(e) => {
+    if (isBayan) return;
+    setEditForm((p) => ({ ...p, rate: e.target.value }));
+  }}
+  placeholder={isBayan ? "No access" : "Rate..."}
+  disabled={isBayan}
+  readOnly={isBayan}
+/>
+<Select
+  options={[
+    { value: "IQD", label: "IQD" },
+    { value: "USD", label: "USD" },
+  ]}
+  value={{ value: editForm.currency, label: editForm.currency }}
+  onChange={(v) => {
+    if (isBayan) return;
+    setEditForm((p) => ({ ...p, currency: v?.value || "IQD" }));
+  }}
+  className="w-40 text-xs"
+  isDisabled={isBayan}
+/>
                   </div>
                 ) : (
                   <p className="font-medium">
-                    {selectedTicket.rate ? (
-                      <span>
-                        {Number(selectedTicket.rate || 0).toLocaleString()}{" "}
-                        <span className="ml-1">{selectedTicket.currency}</span>
-                      </span>
-                    ) : (
-                      "—"
-                    )}
-                  </p>
+                  {isBayan
+                    ? "*****"
+                    : selectedTicket.rate ? (
+                        <span>
+                          {Number(selectedTicket.rate || 0).toLocaleString()}{" "}
+                          <span className="ml-1">{selectedTicket.currency}</span>
+                        </span>
+                      ) : (
+                        "—"
+                      )}
+                </p>
                 )}
               </div>
             </div>
