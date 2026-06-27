@@ -1,23 +1,38 @@
 "use client";
+
 import { useState, useEffect } from "react";
-import { FaUserCircle, FaBars, FaUserPlus, FaSignOutAlt } from "react-icons/fa";
+import {
+  FaUserCircle,
+  FaBars,
+  FaTimes,
+  FaUserPlus,
+  FaSignOutAlt,
+  FaTasks,
+  FaBuilding,
+} from "react-icons/fa";
 import { useRouter, usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Poppins } from "next/font/google";
 import { BiSolidReport } from "react-icons/bi";
-import { FaTasks } from "react-icons/fa";
 
-const poppins = Poppins({
-  subsets: ["latin"],
-  weight: ["400", "600", "700"],
-});
+const NAV_ITEMS = [
+  { href: "/create-ticket", label: "Tickets", icon: FaTasks },
+  { href: "/reports", label: "Reports", icon: BiSolidReport },
+];
+
+const ADMIN_ITEMS = [
+  { href: "/register", label: "Users", icon: FaUserPlus },
+  { href: "/companies", label: "Companies", icon: FaBuilding },
+];
 
 export default function Header({ onLogout }) {
   const router = useRouter();
   const pathname = usePathname();
-  const [menuOpen, setMenuOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
   const [username, setUsername] = useState(null);
   const [role, setRole] = useState(null);
+
+  const isLogin = pathname === "/login";
+  const isAdmin = role === "admin";
 
   useEffect(() => {
     const updateUser = () => {
@@ -25,185 +40,211 @@ export default function Header({ onLogout }) {
       const storedRole = localStorage.getItem("role");
       setUsername(storedUser || null);
       setRole(storedRole || "user");
-      if (!storedUser) setMenuOpen(false);
+      if (!storedUser) setSidebarOpen(false);
     };
     updateUser();
     window.addEventListener("userChanged", updateUser);
     return () => window.removeEventListener("userChanged", updateUser);
   }, []);
 
+  useEffect(() => {
+    setSidebarOpen(false);
+  }, [pathname]);
+
+  useEffect(() => {
+    document.body.style.overflow = sidebarOpen ? "hidden" : "";
+    return () => {
+      document.body.style.overflow = "";
+    };
+  }, [sidebarOpen]);
+
   const handleLogout = () => {
     localStorage.removeItem("username");
     localStorage.removeItem("role");
     setUsername(null);
     setRole(null);
+    setSidebarOpen(false);
     window.dispatchEvent(new Event("userChanged"));
     if (onLogout) onLogout();
     router.push("/login");
   };
 
+  const navigate = (href) => {
+    setSidebarOpen(false);
+    router.push(href);
+  };
+
+  const isActive = (href) => {
+    if (href === "/create-ticket") {
+      return pathname === "/create-ticket" || pathname.startsWith("/tickets");
+    }
+    return pathname === href || pathname.startsWith(`${href}/`);
+  };
+
+  if (isLogin) return null;
+
   return (
-    <motion.header
-      initial={{ y: "-100%", opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      exit={{ y: "-100%", opacity: 0 }}
-      transition={{ duration: 0.5, ease: "easeInOut" }}
-      className="sticky top-0 z-50 w-full
-                 backdrop-blur-xl border-b border-gray-800/60
-                 bg-gradient-to-b from-gray-800 via-gray-750 to-gray-900
-                 shadow-[0_4px_24px_rgba(0,0,0,0.7)]"
-    >
-      {/* Grid 3 أعمدة */}
-      <div className="w-full grid grid-cols-3 items-center px-6 h-16">
-        {/* يسار */}
-        <div className="flex flex-col items-start leading-tight">
-          <span
-            className={`font-bold text-2xl tracking-tight
-                        bg-gradient-to-r from-gray-300 via-gray-100 to-white
-                        text-transparent bg-clip-text ${poppins.className}`}
-          >
-            SPC
-          </span>
-          <span className={`text-[11px] text-gray-300 ${poppins.className}`}>
-            Developed by SPC team
-          </span>
-          {/* <span className="absolute -bottom-2 left-6 h-[2px] w-16 rounded-full
-                           bg-gradient-to-r from-gray-500 via-gray-400 to-gray-300 opacity-80" /> */}
-        </div>
+    <>
+      <header className="sticky top-0 z-40 w-full bg-slate-950 border-b border-slate-800 shadow-lg shadow-black/20">
+        <div className="max-w-7xl mx-auto px-4 sm:px-6">
+          <div className="flex items-center justify-between h-16 gap-4">
+            {/* Left: logo */}
+            <button
+              onClick={() => navigate("/create-ticket")}
+              className="flex items-center gap-3 group"
+            >
+              <div className="w-9 h-9 rounded-xl bg-white flex items-center justify-center shadow-sm group-hover:bg-slate-100 transition">
+                <span className="text-slate-950 text-xs font-black tracking-wide">SPC</span>
+              </div>
+              <div className="leading-tight text-left">
+                <p className="text-sm font-bold text-white">Ticket System</p>
+                <p className="text-[10px] text-slate-500 font-medium hidden sm:block">
+                  Developed by SPC team
+                </p>
+              </div>
+            </button>
 
-        {/* الوسط */}
-        <div className="flex justify-center">
-          <h1
-            className="text-base sm:text-lg md:text-2xl font-bold tracking-tight
-                       bg-gradient-to-r from-gray-200 via-gray-100 to-white
-                       text-transparent bg-clip-text"
-          >
-            Ticket System
-          </h1>
-        </div>
-
-        {/* يمين */}
-        <div className="flex justify-end items-center">
-          <AnimatePresence>
-            {pathname !== "/login" && username && (
-              <motion.div
-                key="user-cluster"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                transition={{ duration: 0.4, ease: "easeInOut" }}
-                className="flex items-center gap-3"
-              >
-                {/* بطاقة اليوزر */}
-                <motion.div
-                  whileHover={{ scale: 1.04 }}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-xl
-                             bg-gray-800/80 border border-gray-600 shadow-sm"
+            {/* Right: user + burger */}
+            {username && (
+              <div className="flex items-center gap-2">
+                <div className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-900 border border-slate-800">
+                  <FaUserCircle className="text-slate-400 text-xl shrink-0" />
+                  <div className="leading-tight text-left hidden sm:block">
+                    <p className="text-sm font-semibold text-slate-100 max-w-[140px] truncate">
+                      {username}
+                    </p>
+                    <p className="text-[10px] text-slate-500 capitalize">{role}</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSidebarOpen(true)}
+                  className="p-2.5 rounded-xl bg-slate-900 border border-slate-700 text-slate-300 hover:text-white hover:bg-slate-800 hover:border-slate-600 transition"
+                  aria-label="Open menu"
                 >
-                  <FaUserCircle className="text-gray-200 text-2xl" />
-                  <span className="text-sm font-medium text-gray-100">
-                    {username}
-                  </span>
-                </motion.div>
-
-                {/* زر المنيو */}
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  onClick={() => setMenuOpen((v) => !v)}
-                  className={`p-2 rounded-xl border transition 
-                    ${menuOpen
-                      ? "bg-gray-700 border-gray-500"
-                      : "bg-gray-800 hover:bg-gray-700 border-gray-600"}`}
-                  aria-label="menu"
-                >
-                  <motion.div
-                    animate={{ rotate: menuOpen ? 90 : 0 }}
-                    transition={{ duration: 0.35 }}
-                  >
-                    <FaBars className="text-gray-200 text-lg" />
-                  </motion.div>
-                </motion.button>
-
-                {/* المنيو */}
-                <AnimatePresence>
-                  {menuOpen && (
-                    <motion.div
-                      key="menu"
-                      initial={{ opacity: 0, y: -10 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: -10 }}
-                      transition={{ duration: 0.35, ease: "easeInOut" }}
-                      className="absolute right-0 top-12 w-56 overflow-hidden rounded-2xl
-                                 border border-gray-600 bg-gray-800 shadow-xl"
-                    >
-                      <div className="p-1">
-                        <MenuItem
-                          onClick={() => {
-                            setMenuOpen(false);
-                            router.push("/create-ticket");
-                          }}
-                          icon={<FaTasks className="text-gray-200" />}
-                          label="Create Ticket"
-                        />
-                        {role === "admin" && (
-                          <MenuItem
-                            onClick={() => {
-                              setMenuOpen(false);
-                              router.push("/register");
-                            }}
-                            icon={<FaUserPlus className="text-gray-200" />}
-                            label="Create User"
-                          />
-                        )}
-                        {role === "admin" && (
-                          <MenuItem
-                            onClick={() => {
-                              setMenuOpen(false);
-                              router.push("/companies");
-                            }}
-                            icon={<FaUserPlus className="text-gray-200" />}
-                            label="Companies"
-                          />
-                        )}
-
-                          <MenuItem
-                            onClick={() => {
-                              setMenuOpen(false);
-                              router.push("/reports");
-                            }}
-                            icon={<BiSolidReport className="text-gray-200" />}
-                            label="Reports"
-                          />
-
-                        <MenuItem
-                          onClick={handleLogout}
-                          icon={<FaSignOutAlt className="text-red-400" />}
-                          label="Logout"
-                          danger
-                        />
-                      </div>
-                    </motion.div>
-                  )}
-                </AnimatePresence>
-              </motion.div>
+                  <FaBars className="text-lg" />
+                </button>
+              </div>
             )}
-          </AnimatePresence>
+          </div>
         </div>
-      </div>
-    </motion.header>
+      </header>
+
+      {/* Overlay + Side Drawer */}
+      <AnimatePresence>
+        {sidebarOpen && username && (
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.2 }}
+              onClick={() => setSidebarOpen(false)}
+              className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm"
+            />
+
+            <motion.aside
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", stiffness: 320, damping: 32 }}
+              className="fixed top-0 right-0 z-50 h-full w-72 max-w-[85vw] bg-slate-950 border-l border-slate-800 shadow-2xl flex flex-col"
+            >
+              {/* Drawer header */}
+              <div className="flex items-center justify-between px-5 py-5 border-b border-slate-800">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-white flex items-center justify-center">
+                    <span className="text-slate-950 text-xs font-black">SPC</span>
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white">Menu</p>
+                    <p className="text-xs text-slate-500">Navigation</p>
+                  </div>
+                </div>
+                <button
+                  onClick={() => setSidebarOpen(false)}
+                  className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition"
+                  aria-label="Close menu"
+                >
+                  <FaTimes className="text-lg" />
+                </button>
+              </div>
+
+              {/* User info */}
+              <div className="px-5 py-4 border-b border-slate-800/80">
+                <div className="flex items-center gap-3 p-3 rounded-xl bg-slate-900 border border-slate-800">
+                  <FaUserCircle className="text-slate-400 text-2xl shrink-0" />
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-white truncate">{username}</p>
+                    <p className="text-xs text-slate-500 capitalize">{role}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Nav links */}
+              <nav className="flex-1 overflow-y-auto px-4 py-4 space-y-1">
+                <p className="px-3 py-2 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
+                  Main
+                </p>
+                {NAV_ITEMS.map(({ href, label, icon: Icon }) => (
+                  <SidebarItem
+                    key={href}
+                    active={isActive(href)}
+                    onClick={() => navigate(href)}
+                    icon={<Icon />}
+                    label={label}
+                  />
+                ))}
+
+                {isAdmin && (
+                  <>
+                    <p className="px-3 pt-5 pb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-600">
+                      Admin
+                    </p>
+                    {ADMIN_ITEMS.map(({ href, label, icon: Icon }) => (
+                      <SidebarItem
+                        key={href}
+                        active={isActive(href)}
+                        onClick={() => navigate(href)}
+                        icon={<Icon />}
+                        label={label}
+                      />
+                    ))}
+                  </>
+                )}
+              </nav>
+
+              {/* Logout */}
+              <div className="p-4 border-t border-slate-800">
+                <button
+                  onClick={handleLogout}
+                  className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-red-400 bg-red-950/30 border border-red-900/40 hover:bg-red-950/50 transition"
+                >
+                  <FaSignOutAlt className="text-base" />
+                  Logout
+                </button>
+              </div>
+            </motion.aside>
+          </>
+        )}
+      </AnimatePresence>
+    </>
   );
 }
 
-function MenuItem({ onClick, icon, label, danger = false }) {
+function SidebarItem({ active, onClick, icon, label }) {
   return (
-    <motion.button
-      whileHover={{ scale: 1.01 }}
+    <button
       onClick={onClick}
-      className={`w-full flex items-center gap-3 px-4 py-2.5 text-sm rounded-xl transition
-        ${danger ? "text-red-400 hover:bg-red-900/40" : "text-gray-200 hover:bg-gray-700"}`}
+      className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium transition ${
+        active
+          ? "bg-white text-slate-950 shadow-sm"
+          : "text-slate-400 hover:text-white hover:bg-slate-900"
+      }`}
     >
-      <span className="text-base">{icon}</span>
-      <span className="font-medium">{label}</span>
-    </motion.button>
+      <span className={`text-base ${active ? "text-slate-700" : "text-slate-500"}`}>
+        {icon}
+      </span>
+      {label}
+    </button>
   );
 }

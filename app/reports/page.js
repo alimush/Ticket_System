@@ -4,9 +4,16 @@ import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
 const Select = dynamic(() => import("react-select"), { ssr: false });
 import * as XLSX from "xlsx";
-import { saveAs } from "file-saver";
 import { getCurrentUser, isAdmin } from "@/lib/permissions";
 import { AiOutlineDelete } from "react-icons/ai";
+import { FaFileExcel, FaTimes, FaEye, FaCheck, FaMoneyBillWave } from "react-icons/fa";
+import LoadingSpinner from "@/components/LoadingSpinner";
+import {
+  StatusBadge,
+  PriorityBadge,
+  PaidBadge,
+  selectStyles,
+} from "@/components/tickets/TicketBadges";
 
 export default function ReportPage() {
   const [tickets, setTickets] = useState([]);
@@ -329,363 +336,327 @@ export default function ReportPage() {
     (sum, t) => (t.currency === "USD" ? sum + (parseFloat(t.rate) || 0) : sum),
     0
   );
-  return (
-    <div className="min-h-screen w-full bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 p-4">
-      {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
-        <h1 className="text-xl font-bold text-gray-800">Tickets Report</h1>
 
-        <div className="flex flex-wrap gap-2 items-center">
+  const clearFilters = () => {
+    setFilterUser(null);
+    setFilterCompany(null);
+    setFilterPaid(null);
+    setFilterStatus(null);
+    setFilterDateFrom("");
+    setFilterDateTo("");
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-800">Reports</h1>
+          <p className="text-sm text-slate-500 mt-0.5">
+            {filtered.length} tickets
+            {anyFilterApplied ? " (filtered)" : ""} · Page {currentPage}/{totalPages}
+          </p>
+        </div>
+        <button
+          onClick={exportToExcel}
+          className="inline-flex items-center justify-center gap-2 bg-emerald-600 text-white text-sm font-medium px-5 py-2.5 rounded-xl hover:bg-emerald-700 transition shadow-sm"
+        >
+          <FaFileExcel />
+          Export Excel
+        </button>
+      </div>
+
+      {/* Stats */}
+      {!isBayan && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          <StatCard label="Total Tickets" value={tickets.length.toString()} index={0} />
+          <StatCard label="Filtered" value={filtered.length.toString()} index={1} />
+          <StatCard
+            label="Filtered IQD"
+            value={`${filteredIQD.toLocaleString()} IQD`}
+            index={2}
+          />
+          <StatCard
+            label="Filtered USD"
+            value={`${filteredUSD.toLocaleString()} USD`}
+            index={3}
+          />
+        </div>
+      )}
+
+      {/* Filters */}
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.35 }}
+        className="rounded-2xl border border-slate-200 bg-white p-4 sm:p-5 shadow-sm space-y-4"
+      >
+        <div className="flex items-center justify-between">
+          <h2 className="text-sm font-semibold text-slate-700">Filters</h2>
+          {anyFilterApplied && (
+            <button
+              onClick={clearFilters}
+              className="inline-flex items-center gap-1.5 text-xs font-medium text-slate-500 hover:text-slate-800 transition"
+            >
+              <FaTimes className="text-[10px]" />
+              Clear all
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
           {isAdmin(currentUser) && (
-            <Select
+            <FilterSelect
+              label="User"
               options={userOptions}
               value={filterUser}
               onChange={setFilterUser}
-              placeholder="User..."
-              isClearable
-              className="w-36 text-xs"
+              placeholder="All users"
             />
           )}
-
-          <Select
+          <FilterSelect
+            label="Company"
             options={companyOptions}
             value={filterCompany}
             onChange={setFilterCompany}
-            placeholder="Company..."
-            isClearable
-            className="w-36 text-xs"
+            placeholder="All companies"
           />
-
-          <Select
+          <FilterSelect
+            label="Status"
             options={[
               { value: "open", label: "Open" },
+              { value: "in_progress", label: "In Progress" },
               { value: "done", label: "Done" },
             ]}
             value={filterStatus}
             onChange={setFilterStatus}
-            placeholder="Status..."
-            isClearable
-            className="w-28 text-xs"
+            placeholder="All statuses"
           />
-
-          <Select
+          <FilterSelect
+            label="Paid"
             options={[
               { value: "yes", label: "Yes" },
               { value: "no", label: "No" },
             ]}
             value={filterPaid}
             onChange={setFilterPaid}
-            placeholder="Paid..."
-            isClearable
-            className="w-28 text-xs"
+            placeholder="All"
           />
-
-          <input
-            type="date"
-            className="border rounded-md px-2 py-1 text-xs"
-            value={filterDateFrom}
-            onChange={(e) => setFilterDateFrom(e.target.value)}
-          />
-          <input
-            type="date"
-            className="border rounded-md px-2 py-1 text-xs"
-            value={filterDateTo}
-            onChange={(e) => setFilterDateTo(e.target.value)}
-          />
-
-          <button
-            onClick={exportToExcel}
-            className="px-2 py-1 text-xs bg-green-600 text-white rounded hover:bg-green-700"
-          >
-            Export Excel
-          </button>
-        </div>
-      </div>
-
-      {/* ✅ Pagination controls (added) */}
-      <div className="mb-3 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
-        <div className="text-xs text-gray-700">
-          Page <b>{currentPage}</b> / <b>{totalPages}</b> — Rows: <b>{filtered.length}</b>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <button
-            onClick={prevPage}
-            disabled={currentPage <= 1 || loading}
-            className="px-2 py-1 rounded border bg-white text-xs disabled:opacity-50"
-          >
-            ◀ Prev
-          </button>
-
-          <div className="flex items-center gap-1">
-            {getPageNumbers().map((p, idx) =>
-              p === "..." ? (
-                <span key={`dots-${idx}`} className="px-2 text-xs text-gray-500">
-                  ...
-                </span>
-              ) : (
-                <button
-                  key={p}
-                  onClick={() => paginate(p)}
-                  disabled={loading}
-                  className={`px-2 py-1 rounded border text-xs ${
-                    p === currentPage ? "bg-gray-800 text-white border-gray-800" : "bg-white text-gray-800"
-                  }`}
-                >
-                  {p}
-                </button>
-              )
-            )}
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1.5">
+              Due from
+            </label>
+            <input
+              type="date"
+              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              value={filterDateFrom}
+              onChange={(e) => setFilterDateFrom(e.target.value)}
+            />
           </div>
-
-          <button
-            onClick={nextPage}
-            disabled={currentPage >= totalPages || loading}
-            className="px-2 py-1 rounded border bg-white text-xs disabled:opacity-50"
-          >
-            Next ▶
-          </button>
-
-          <input
-            type="number"
-            min={1}
-            max={totalPages}
-            value={currentPage}
-            onChange={(e) => paginate(Number(e.target.value || 1))}
-            className="w-20 px-2 py-1 rounded border text-xs bg-white"
-            disabled={loading}
-          />
+          <div>
+            <label className="block text-xs font-medium text-slate-500 mb-1.5">
+              Due to
+            </label>
+            <input
+              type="date"
+              className="w-full border border-slate-200 rounded-xl px-3 py-2.5 text-sm bg-slate-50 text-slate-900 focus:outline-none focus:ring-2 focus:ring-slate-300"
+              value={filterDateTo}
+              onChange={(e) => setFilterDateTo(e.target.value)}
+            />
+          </div>
         </div>
-      </div>
+      </motion.div>
+
+      {/* Pagination top */}
+      {!loading && filtered.length > 0 && (
+        <PaginationBar
+          currentPage={currentPage}
+          totalPages={totalPages}
+          filteredCount={filtered.length}
+          onPrev={prevPage}
+          onNext={nextPage}
+          onPaginate={paginate}
+          getPageNumbers={getPageNumbers}
+          disabled={loading}
+        />
+      )}
 
       {/* Table */}
       {loading ? (
-        <div className="flex justify-center items-center min-h-[300px]">
-          <motion.div
-            className="w-14 h-14 border-4 border-gray-400 border-t-transparent rounded-full animate-spin"
-            initial={{ rotate: 0 }}
-            animate={{ rotate: 360 }}
-            transition={{ repeat: Infinity, duration: 1 }}
-          />
+        <div className="rounded-2xl border border-slate-200 bg-white shadow-sm min-h-[320px] flex items-center justify-center">
+          <LoadingSpinner message="Loading report..." />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="rounded-2xl border border-slate-200 bg-white p-16 text-center shadow-sm">
+          <p className="text-slate-600 font-medium">No tickets match your filters</p>
+          {anyFilterApplied && (
+            <button
+              onClick={clearFilters}
+              className="mt-3 text-sm text-slate-500 hover:text-slate-800 underline"
+            >
+              Clear filters
+            </button>
+          )}
         </div>
       ) : (
-        <div className="overflow-x-auto bg-white rounded-xl shadow border border-gray-200">
-          <motion.table
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            transition={{ duration: 0.6 }}
-            className="min-w-full border border-gray-300 text-sm rounded-lg overflow-hidden shadow-sm"
-          >
-            <thead className="bg-gradient-to-r from-gray-700 to-gray-800 text-white">
-              <tr>
-                <th className="px-4 py-3 border border-gray-300 text-left">Title</th>
-                <th className="px-4 py-3 border border-gray-300 text-left">Description</th>
-                <th className="px-4 py-3 border border-gray-300 text-left">Assigned To</th>
-                <th className="px-4 py-3 border border-gray-300 text-left">Created By</th>
-                <th className="px-4 py-3 border border-gray-300 text-left">Company</th>
-                <th className="px-4 py-3 border border-gray-300 text-left">Priority</th>
-                <th className="px-4 py-3 border border-gray-300 text-left">Due Date</th>
-                <th className="px-4 py-3 border border-gray-300 text-left">Done At</th>
-                <th className="px-4 py-3 border border-gray-300 text-left">Status</th>
-                <th className="px-4 py-3 border border-gray-300 text-left">Paid</th>
-                <th className="px-12 py-3 border border-gray-300 text-left">Rate</th>
-                {isAdmin(currentUser) && (
-                  <th className="px-4 py-3 border border-gray-300 text-left">Delete</th>
-                )}
-              </tr>
-            </thead>
-
-            <motion.tbody
-  className="divide-y divide-gray-200"
-  key={`${currentPage}-${filtered.length}`}   // ✅ مهم
-  initial="hidden"
-  animate="show"
-  variants={{
-    hidden: { opacity: 0 },
-    show: { opacity: 1, transition: { staggerChildren: 0.05 } },
-  }}
->
-              {currentRows.map((t) => (
-                <motion.tr
-                  key={t._id}
-                  variants={{
-                    hidden: { opacity: 0, y: 10 },
-                    show: { opacity: 1, y: 0 },
-                  }}
-                  transition={{ duration: 0.3 }}
-                  className="hover:bg-gray-100 even:bg-gray-50 cursor-pointer transition-colors"
-                  onClick={() => openTicket(t)}
-                >
-                  <td className="px-4 py-2 border border-gray-200">{t.title}</td>
-                  <td className="px-4 py-2 border border-gray-200 whitespace-pre-wrap break-words">
-                    {t.description}
-                  </td>
-                  <td className="px-4 py-2 border border-gray-200">{t.assignedTo}</td>
-                  <td className="px-4 py-2 border border-gray-200">{t.createdBy}</td>
-                  <td className="px-4 py-2 border border-gray-200">{t.company || "—"}</td>
-                  <td className="px-4 py-2 border border-gray-200">{t.priority}</td>
-                  <td className="px-4 py-2 border border-gray-200">{t.dueDate?.slice(0, 10) || "—"}</td>
-                  <td className="px-4 py-2 border border-gray-200">
-                    {t.doneAt ? new Date(t.doneAt).toLocaleString() : "—"}
-                  </td>
-
-                  {/* Status */}
-                  <td
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      const newStatus = t.status === "done" ? "open" : "done";
-                      const res = await fetch(`/api/tickets/${t._id}`, {
+        <motion.div
+          key={currentPage}
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.35 }}
+          className="rounded-2xl border border-slate-200 bg-white shadow-sm overflow-hidden"
+        >
+          <div className="overflow-x-auto">
+            <table className="min-w-full text-sm">
+              <thead>
+                <tr className="bg-slate-950 text-slate-300 text-xs uppercase tracking-wide">
+                  <th className="px-4 py-3.5 text-left font-semibold">Title</th>
+                  <th className="px-4 py-3.5 text-left font-semibold max-w-[200px]">Description</th>
+                  <th className="px-4 py-3.5 text-left font-semibold">Assigned</th>
+                  <th className="px-4 py-3.5 text-left font-semibold">Created By</th>
+                  <th className="px-4 py-3.5 text-left font-semibold">Company</th>
+                  <th className="px-4 py-3.5 text-left font-semibold">Priority</th>
+                  <th className="px-4 py-3.5 text-left font-semibold">Due</th>
+                  <th className="px-4 py-3.5 text-left font-semibold">Done At</th>
+                  <th className="px-4 py-3.5 text-left font-semibold">Status</th>
+                  <th className="px-4 py-3.5 text-left font-semibold">Paid</th>
+                  <th className="px-4 py-3.5 text-right font-semibold">Rate</th>
+                  <th className="px-4 py-3.5 text-center font-semibold w-36">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {currentRows.map((t) => (
+                  <ReportTableRow
+                    key={t._id}
+                    ticket={t}
+                    isBayan={isBayan}
+                    isAdminUser={isAdmin(currentUser)}
+                    onOpen={openTicket}
+                    onToggleStatus={async (ticket) => {
+                      const newStatus = ticket.status === "done" ? "open" : "done";
+                      const res = await fetch(`/api/tickets/${ticket._id}`, {
                         method: "PATCH",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ status: newStatus }),
                       });
                       if (res.ok) {
                         const updated = await res.json();
-                        setTickets((prev) => prev.map((x) => (x._id === updated._id ? updated : x)));
-                        setFiltered((prev) => prev.map((x) => (x._id === updated._id ? updated : x)));
+                        setTickets((prev) =>
+                          prev.map((x) => (x._id === updated._id ? updated : x))
+                        );
+                        setFiltered((prev) =>
+                          prev.map((x) => (x._id === updated._id ? updated : x))
+                        );
                       }
                     }}
-                    className="px-4 py-2 border border-gray-200 font-semibold text-center cursor-pointer transition hover:bg-gray-200"
-                  >
-                    {t.status === "done" ? (
-                      <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Done</span>
-                    ) : (
-                      <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">Open</span>
-                    )}
-                  </td>
-
-                  {/* Paid */}
-                  <td
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      if (t.paid === "yes") {
-                        alert("❌ لا يمكن التراجع بعد وضع الحالة على Yes.");
+                    onMarkPaid={async (ticket) => {
+                      if (ticket.paid === "yes") {
+                        alert("❌ Cannot revert after Paid is Yes.");
                         return;
                       }
-                      const res = await fetch(`/api/tickets/${t._id}`, {
+                      if (!isAdmin(currentUser)) return;
+                      const res = await fetch(`/api/tickets/${ticket._id}`, {
                         method: "PATCH",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ paid: "yes" }),
                       });
                       if (res.ok) {
                         const updated = await res.json();
-                        setTickets((prev) => prev.map((x) => (x._id === updated._id ? updated : x)));
-                        setFiltered((prev) => prev.map((x) => (x._id === updated._id ? updated : x)));
+                        setTickets((prev) =>
+                          prev.map((x) => (x._id === updated._id ? updated : x))
+                        );
+                        setFiltered((prev) =>
+                          prev.map((x) => (x._id === updated._id ? updated : x))
+                        );
                       }
                     }}
-                    className={`px-4 py-2 border border-gray-200 font-semibold text-center transition ${
-                      isAdmin(currentUser)
-                        ? t.paid === "yes"
-                          ? "cursor-not-allowed bg-green-50"
-                          : "cursor-pointer hover:bg-gray-200"
-                        : "cursor-default bg-gray-50"
-                    }`}
-                  >
-                    {t.paid === "yes" ? (
-                      <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Yes</span>
-                    ) : (
-                      <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">No</span>
-                    )}
-                  </td>
+                    onDelete={async (ticket) => {
+                      if (!confirm("Delete this ticket?")) return;
+                      const res = await fetch(`/api/tickets/${ticket._id}`, {
+                        method: "DELETE",
+                      });
+                      if (res.ok) {
+                        setTickets((prev) => prev.filter((x) => x._id !== ticket._id));
+                        setFiltered((prev) => prev.filter((x) => x._id !== ticket._id));
+                      } else {
+                        alert("Delete failed");
+                      }
+                    }}
+                  />
+                ))}
+              </tbody>
+            </table>
+          </div>
 
-                  {/* Rate */}
-                  <td className="px-4 py-2 border border-gray-200">
-  {isBayan
-    ? "*****"
-    : t.rate ? (
-        <span>
-          {Number(t.rate || 0).toLocaleString()} <span className="ml-1">{t.currency}</span>
-        </span>
-      ) : (
-        "—"
-      )}
-</td>
-
-                  {/* Delete */}
-                  {isAdmin(currentUser) && (
-                    <td
-                      onClick={async (e) => {
-                        e.stopPropagation();
-                        if (confirm("هل تريد بالتأكيد حذف هذا التكت؟")) {
-                          const res = await fetch(`/api/tickets/${t._id}`, { method: "DELETE" });
-                          if (res.ok) {
-                            setTickets((prev) => prev.filter((x) => x._id !== t._id));
-                            setFiltered((prev) => prev.filter((x) => x._id !== t._id));
-                          } else {
-                            alert("فشل الحذف");
-                          }
-                        }
-                      }}
-                      className="px-4 py-2 border border-gray-200 text-center text-red-600 cursor-pointer hover:bg-red-100 transition"
-                    >
-                      <AiOutlineDelete size={18} className="inline-block" />
-                    </td>
-                  )}
-                </motion.tr>
-              ))}
-            </motion.tbody>
-
-            <tfoot className="bg-gray-700 font-semibold text-white">
-  <tr>
-    <td colSpan="10" className="text-right px-4 py-3 border border-gray-600">
-      Page Subtotal IQD:
-    </td>
-    <td className="px-4 py-3 border border-gray-600 text-right">
-      {pageIQD.toLocaleString()} IQD
-    </td>
-    <td className="border border-gray-600"></td>
-  </tr>
-
-  <tr>
-    <td colSpan="10" className="text-right px-4 py-3 border border-gray-600">
-      Page Subtotal USD:
-    </td>
-    <td className="px-4 py-3 border border-gray-600 text-right">
-      {pageUSD.toLocaleString()} USD
-    </td>
-    <td className="border border-gray-600"></td>
-  </tr>
-</tfoot>
-          </motion.table>
-        </div>
+          {!isBayan && (
+            <ReportSubtotals pageIQD={pageIQD} pageUSD={pageUSD} currentPage={currentPage} />
+          )}
+        </motion.div>
       )}
 
-      {/* Popup (✅ now with Edit) */}
+      {totalPages > 1 && !loading && (
+        <PaginationBar
+          currentPage={currentPage}
+          totalPages={totalPages}
+          filteredCount={filtered.length}
+          onPrev={prevPage}
+          onNext={nextPage}
+          onPaginate={paginate}
+          getPageNumbers={getPageNumbers}
+          disabled={loading}
+        />
+      )}
+
+      {/* Detail Modal */}
       {selectedTicket && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center p-4 z-50">
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => {
+            setSelectedTicket(null);
+            setIsEditing(false);
+            setSaving(false);
+          }}
+        >
           <motion.div
-            initial={{ y: 40, opacity: 0 }}
-            animate={{ y: 0, opacity: 1 }}
-            exit={{ y: 40, opacity: 0 }}
-            transition={{ duration: 0.3 }}
-            className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl overflow-hidden"
+            initial={{ opacity: 0, scale: 0.96, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden"
           >
-            <div className="bg-gradient-to-r from-gray-800 via-gray-700 to-gray-900 px-6 py-3 flex justify-between items-center">
-              <h2 className="text-lg font-semibold text-white">Ticket Details</h2>
+            <div className="flex items-start justify-between px-6 py-4 border-b border-slate-200 bg-slate-950">
+              <div className="flex-1 min-w-0 pr-4">
+                <div className="flex flex-wrap gap-2 mb-2">
+                  <StatusBadge status={selectedTicket.status} />
+                  <PriorityBadge priority={selectedTicket.priority} />
+                </div>
+                <h2 className="text-lg font-semibold text-white truncate">
+                  {selectedTicket.title}
+                </h2>
+              </div>
               <button
                 onClick={() => {
                   setSelectedTicket(null);
                   setIsEditing(false);
                   setSaving(false);
                 }}
-                className="text-gray-300 hover:text-white transition"
+                className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition shrink-0"
               >
                 ✕
               </button>
             </div>
 
-            {/* Actions */}
-            <div className="px-6 py-3 border-b bg-gray-50 flex items-center justify-between">
-              <div className="text-xs text-gray-600">
-                {canEditTicket(selectedTicket) ? "تقدر تعدّل من هنا" : "عرض فقط (ما عندك صلاحية تعديل)"}
-              </div>
-
+            <div className="px-6 py-3 border-b border-slate-100 bg-slate-50 flex items-center justify-between">
+              <p className="text-xs text-slate-500">
+                {canEditTicket(selectedTicket)
+                  ? "You can edit this ticket"
+                  : "View only"}
+              </p>
               {canEditTicket(selectedTicket) && (
-                <div className="flex items-center gap-2">
+                <div className="flex gap-2">
                   {!isEditing ? (
                     <button
                       onClick={() => setIsEditing(true)}
-                      className="px-3 py-1.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700"
+                      className="px-4 py-2 text-xs font-medium bg-slate-900 text-white rounded-lg hover:bg-slate-800"
                     >
                       Edit
                     </button>
@@ -693,18 +664,18 @@ export default function ReportPage() {
                     <>
                       <button
                         onClick={() => {
-                          openTicket(selectedTicket); // يرجّع فورم على آخر نسخة
+                          openTicket(selectedTicket);
                           setIsEditing(false);
                         }}
-                        className="px-3 py-1.5 text-xs bg-gray-200 text-gray-800 rounded hover:bg-gray-300"
                         disabled={saving}
+                        className="px-4 py-2 text-xs font-medium bg-white border border-slate-200 text-slate-700 rounded-lg hover:bg-slate-50"
                       >
                         Cancel
                       </button>
                       <button
                         onClick={saveEdits}
-                        className="px-3 py-1.5 text-xs bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-60"
                         disabled={saving}
+                        className="px-4 py-2 text-xs font-medium bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 disabled:opacity-60"
                       >
                         {saving ? "Saving..." : "Save"}
                       </button>
@@ -714,233 +685,227 @@ export default function ReportPage() {
               )}
             </div>
 
-            <div className="p-6 text-sm text-gray-800 grid grid-cols-2 gap-4">
-              {/* Title */}
-              <div className="border rounded-lg p-3 col-span-2">
-                <h3 className="text-xs text-gray-500">Title</h3>
+            <div className="flex-1 overflow-y-auto p-6 text-sm space-y-4">
+              <DetailField label="Title" full>
                 {isEditing ? (
                   <input
-                    className="mt-1 w-full border rounded px-2 py-1 text-sm"
+                    className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white mt-1"
                     value={editForm.title}
                     onChange={(e) => setEditForm((p) => ({ ...p, title: e.target.value }))}
                   />
                 ) : (
-                  <p className="font-medium">{selectedTicket.title}</p>
+                  <p className="font-medium text-slate-800 mt-1">{selectedTicket.title}</p>
                 )}
-              </div>
+              </DetailField>
 
-              {/* Description */}
-              <div className="border rounded-lg p-3 col-span-2">
-                <h3 className="text-xs text-gray-500">Description</h3>
+              <DetailField label="Description" full>
                 {isEditing ? (
                   <textarea
-                    className="mt-1 w-full min-h-[120px] border rounded px-2 py-1 text-sm whitespace-pre-wrap"
+                    className="w-full min-h-[100px] border border-slate-200 rounded-lg px-3 py-2 text-sm bg-white mt-1"
                     value={editForm.description}
-                    onChange={(e) => setEditForm((p) => ({ ...p, description: e.target.value }))}
+                    onChange={(e) =>
+                      setEditForm((p) => ({ ...p, description: e.target.value }))
+                    }
                   />
                 ) : (
-                  <p className="font-medium whitespace-pre-wrap break-words">{selectedTicket.description}</p>
-                )}
-              </div>
-
-              {/* Assigned To */}
-              <div className="border rounded-lg p-3">
-                <h3 className="text-xs text-gray-500">Assigned To</h3>
-                {isEditing ? (
-                  <Select
-                    options={userOptions}
-                    value={editForm.assignedTo}
-                    onChange={(v) => setEditForm((p) => ({ ...p, assignedTo: v }))}
-                    placeholder="Select user..."
-                    isClearable
-                    className="mt-1 text-xs"
-                  />
-                ) : (
-                  <p className="font-medium">{selectedTicket.assignedTo || "—"}</p>
-                )}
-              </div>
-
-              {/* Created By */}
-              <div className="border rounded-lg p-3">
-                <h3 className="text-xs text-gray-500">Created By</h3>
-                {isEditing ? (
-                  <input
-                    className="mt-1 w-full border rounded px-2 py-1 text-sm"
-                    value={editForm.createdBy}
-                    onChange={(e) => setEditForm((p) => ({ ...p, createdBy: e.target.value }))}
-                  />
-                ) : (
-                  <p className="font-medium">{selectedTicket.createdBy}</p>
-                )}
-              </div>
-
-              {/* Company */}
-              <div className="border rounded-lg p-3">
-                <h3 className="text-xs text-gray-500">Company</h3>
-                {isEditing ? (
-                  <Select
-                    options={companyOptions}
-                    value={editForm.company}
-                    onChange={(v) => setEditForm((p) => ({ ...p, company: v }))}
-                    placeholder="Select company..."
-                    isClearable
-                    className="mt-1 text-xs"
-                  />
-                ) : (
-                  <p className="font-medium">{selectedTicket.company || "—"}</p>
-                )}
-              </div>
-
-              {/* Priority */}
-              <div className="border rounded-lg p-3">
-                <h3 className="text-xs text-gray-500">Priority</h3>
-                {isEditing ? (
-                  <input
-                    className="mt-1 w-full border rounded px-2 py-1 text-sm"
-                    value={editForm.priority}
-                    onChange={(e) => setEditForm((p) => ({ ...p, priority: e.target.value }))}
-                  />
-                ) : (
-                  <p className="font-medium">{selectedTicket.priority}</p>
-                )}
-              </div>
-
-              {/* Due Date */}
-              <div className="border rounded-lg p-3">
-                <h3 className="text-xs text-gray-500">Due Date</h3>
-                {isEditing ? (
-                  <input
-                    type="date"
-                    className="mt-1 w-full border rounded px-2 py-1 text-sm"
-                    value={editForm.dueDate}
-                    onChange={(e) => setEditForm((p) => ({ ...p, dueDate: e.target.value }))}
-                  />
-                ) : (
-                  <p className="font-medium">{selectedTicket.dueDate?.slice(0, 10) || "—"}</p>
-                )}
-              </div>
-
-              {/* Done At */}
-              <div className="border rounded-lg p-3">
-                <h3 className="text-xs text-gray-500">Done At</h3>
-                <p className="font-medium">
-                  {selectedTicket.doneAt ? new Date(selectedTicket.doneAt).toLocaleString() : "—"}
-                </p>
-              </div>
-
-              {/* Status */}
-              <div className="border rounded-lg p-3">
-                <h3 className="text-xs text-gray-500">Status</h3>
-                {isEditing ? (
-                  <Select
-                    options={[
-                      { value: "open", label: "Open" },
-                      { value: "done", label: "Done" },
-                    ]}
-                    value={{
-                      value: editForm.status,
-                      label: editForm.status === "done" ? "Done" : "Open",
-                    }}
-                    onChange={(v) => setEditForm((p) => ({ ...p, status: v?.value || "open" }))}
-                    className="mt-1 text-xs"
-                  />
-                ) : (
-                  <p className="font-medium">
-                    {selectedTicket.status === "done" ? (
-                      <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Done</span>
-                    ) : (
-                      <span className="px-2 py-1 text-xs rounded-full bg-yellow-100 text-yellow-700">Open</span>
-                    )}
+                  <p className="text-slate-700 mt-1 whitespace-pre-wrap">
+                    {selectedTicket.description || "—"}
                   </p>
                 )}
-              </div>
+              </DetailField>
 
-              {/* Paid */}
-              <div className="border rounded-lg p-3">
-                <h3 className="text-xs text-gray-500">Paid</h3>
-                {isEditing ? (
-                  <Select
-                    options={[
-                      { value: "yes", label: "Yes" },
-                      { value: "no", label: "No" },
-                    ]}
-                    value={{
-                      value: editForm.paid,
-                      label: editForm.paid === "yes" ? "Yes" : "No",
-                    }}
-                    onChange={(v) => setEditForm((p) => ({ ...p, paid: v?.value || "no" }))}
-                    className="mt-1 text-xs"
-                  />
-                ) : (
-                  <p className="font-medium">
-                    {selectedTicket.paid === "yes" ? (
-                      <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">Yes</span>
-                    ) : (
-                      <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">No</span>
-                    )}
+              <div className="grid grid-cols-2 gap-3">
+                <DetailField label="Assigned To">
+                  {isEditing ? (
+                    <Select
+                      options={userOptions}
+                      value={editForm.assignedTo}
+                      onChange={(v) => setEditForm((p) => ({ ...p, assignedTo: v }))}
+                      placeholder="Select user..."
+                      isClearable
+                      styles={selectStyles}
+                      className="mt-1 text-sm"
+                    />
+                  ) : (
+                    <p className="font-medium text-slate-800 mt-1">
+                      {selectedTicket.assignedTo || "—"}
+                    </p>
+                  )}
+                </DetailField>
+                <DetailField label="Created By">
+                  {isEditing ? (
+                    <input
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm mt-1"
+                      value={editForm.createdBy}
+                      onChange={(e) =>
+                        setEditForm((p) => ({ ...p, createdBy: e.target.value }))
+                      }
+                    />
+                  ) : (
+                    <p className="font-medium text-slate-800 mt-1">{selectedTicket.createdBy}</p>
+                  )}
+                </DetailField>
+                <DetailField label="Company">
+                  {isEditing ? (
+                    <Select
+                      options={companyOptions}
+                      value={editForm.company}
+                      onChange={(v) => setEditForm((p) => ({ ...p, company: v }))}
+                      placeholder="Select company..."
+                      isClearable
+                      styles={selectStyles}
+                      className="mt-1 text-sm"
+                    />
+                  ) : (
+                    <p className="font-medium text-slate-800 mt-1">
+                      {selectedTicket.company || "—"}
+                    </p>
+                  )}
+                </DetailField>
+                <DetailField label="Priority">
+                  {isEditing ? (
+                    <input
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm mt-1"
+                      value={editForm.priority}
+                      onChange={(e) =>
+                        setEditForm((p) => ({ ...p, priority: e.target.value }))
+                      }
+                    />
+                  ) : (
+                    <div className="mt-1">
+                      <PriorityBadge priority={selectedTicket.priority} />
+                    </div>
+                  )}
+                </DetailField>
+                <DetailField label="Due Date">
+                  {isEditing ? (
+                    <input
+                      type="date"
+                      className="w-full border border-slate-200 rounded-lg px-3 py-2 text-sm mt-1"
+                      value={editForm.dueDate}
+                      onChange={(e) =>
+                        setEditForm((p) => ({ ...p, dueDate: e.target.value }))
+                      }
+                    />
+                  ) : (
+                    <p className="font-medium text-slate-800 mt-1">
+                      {selectedTicket.dueDate?.slice(0, 10) || "—"}
+                    </p>
+                  )}
+                </DetailField>
+                <DetailField label="Done At">
+                  <p className="font-medium text-slate-800 mt-1">
+                    {selectedTicket.doneAt
+                      ? new Date(selectedTicket.doneAt).toLocaleString()
+                      : "—"}
                   </p>
-                )}
+                </DetailField>
+                <DetailField label="Status">
+                  {isEditing ? (
+                    <Select
+                      options={[
+                        { value: "open", label: "Open" },
+                        { value: "in_progress", label: "In Progress" },
+                        { value: "done", label: "Done" },
+                      ]}
+                      value={{
+                        value: editForm.status,
+                        label:
+                          editForm.status === "done"
+                            ? "Done"
+                            : editForm.status === "in_progress"
+                            ? "In Progress"
+                            : "Open",
+                      }}
+                      onChange={(v) =>
+                        setEditForm((p) => ({ ...p, status: v?.value || "open" }))
+                      }
+                      styles={selectStyles}
+                      className="mt-1 text-sm"
+                    />
+                  ) : (
+                    <div className="mt-1">
+                      <StatusBadge status={selectedTicket.status} />
+                    </div>
+                  )}
+                </DetailField>
+                <DetailField label="Paid">
+                  {isEditing ? (
+                    <Select
+                      options={[
+                        { value: "yes", label: "Yes" },
+                        { value: "no", label: "No" },
+                      ]}
+                      value={{
+                        value: editForm.paid,
+                        label: editForm.paid === "yes" ? "Yes" : "No",
+                      }}
+                      onChange={(v) =>
+                        setEditForm((p) => ({ ...p, paid: v?.value || "no" }))
+                      }
+                      styles={selectStyles}
+                      className="mt-1 text-sm"
+                    />
+                  ) : (
+                    <div className="mt-1">
+                      <PaidBadge paid={selectedTicket.paid} />
+                    </div>
+                  )}
+                </DetailField>
               </div>
 
-              {/* Rate + Currency */}
-              <div className="border rounded-lg p-3 col-span-2">
-                <h3 className="text-xs text-gray-500">Rate</h3>
+              <DetailField label="Rate" full>
                 {isEditing ? (
                   <div className="mt-1 flex gap-2">
-                <input
-  type="text"
-  className={`w-full border rounded px-2 py-1 text-sm ${
-    isBayan ? "bg-gray-100 text-gray-400 cursor-not-allowed" : ""
-  }`}
-  value={isBayan ? "*****" : editForm.rate}
-  onChange={(e) => {
-    if (isBayan) return;
-    setEditForm((p) => ({ ...p, rate: e.target.value }));
-  }}
-  placeholder={isBayan ? "No access" : "Rate..."}
-  disabled={isBayan}
-  readOnly={isBayan}
-/>
-<Select
-  options={[
-    { value: "IQD", label: "IQD" },
-    { value: "USD", label: "USD" },
-  ]}
-  value={{ value: editForm.currency, label: editForm.currency }}
-  onChange={(v) => {
-    if (isBayan) return;
-    setEditForm((p) => ({ ...p, currency: v?.value || "IQD" }));
-  }}
-  className="w-40 text-xs"
-  isDisabled={isBayan}
-/>
+                    <input
+                      type="text"
+                      className={`flex-1 border border-slate-200 rounded-lg px-3 py-2 text-sm ${
+                        isBayan ? "bg-slate-100 text-slate-400 cursor-not-allowed" : ""
+                      }`}
+                      value={isBayan ? "*****" : editForm.rate}
+                      onChange={(e) => {
+                        if (!isBayan)
+                          setEditForm((p) => ({ ...p, rate: e.target.value }));
+                      }}
+                      disabled={isBayan}
+                      readOnly={isBayan}
+                    />
+                    <Select
+                      options={[
+                        { value: "IQD", label: "IQD" },
+                        { value: "USD", label: "USD" },
+                      ]}
+                      value={{ value: editForm.currency, label: editForm.currency }}
+                      onChange={(v) => {
+                        if (!isBayan)
+                          setEditForm((p) => ({ ...p, currency: v?.value || "IQD" }));
+                      }}
+                      styles={selectStyles}
+                      className="w-28 text-sm"
+                      isDisabled={isBayan}
+                    />
                   </div>
                 ) : (
-                  <p className="font-medium">
-                  {isBayan
-                    ? "*****"
-                    : selectedTicket.rate ? (
-                        <span>
-                          {Number(selectedTicket.rate || 0).toLocaleString()}{" "}
-                          <span className="ml-1">{selectedTicket.currency}</span>
-                        </span>
-                      ) : (
-                        "—"
-                      )}
-                </p>
+                  <p className="font-semibold text-slate-800 mt-1">
+                    {isBayan
+                      ? "*****"
+                      : selectedTicket.rate
+                      ? `${Number(selectedTicket.rate).toLocaleString()} ${selectedTicket.currency}`
+                      : "—"}
+                  </p>
                 )}
-              </div>
+              </DetailField>
             </div>
 
-            <div className="px-6 py-3 border-t bg-gray-50 flex justify-end">
+            <div className="px-6 py-4 border-t border-slate-200 bg-slate-50 flex justify-end">
               <button
                 onClick={() => {
                   setSelectedTicket(null);
                   setIsEditing(false);
                   setSaving(false);
                 }}
-                className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
                 disabled={saving}
+                className="px-5 py-2.5 text-sm font-medium bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50"
               >
                 Close
               </button>
@@ -949,5 +914,260 @@ export default function ReportPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function StatCard({ label, value, index = 0 }) {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.35, delay: index * 0.08 }}
+      className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm hover:shadow-md hover:-translate-y-0.5 transition-all duration-200"
+    >
+      <p className="text-xs font-medium text-slate-500 mb-1">{label}</p>
+      <p className="text-lg font-bold text-slate-900 truncate">{value}</p>
+    </motion.div>
+  );
+}
+
+function FilterSelect({ label, options, value, onChange, placeholder }) {
+  return (
+    <div>
+      <label className="block text-xs font-medium text-slate-500 mb-1.5">{label}</label>
+      <Select
+        options={options}
+        value={value}
+        onChange={onChange}
+        placeholder={placeholder}
+        isClearable
+        styles={selectStyles}
+        className="text-sm"
+      />
+    </div>
+  );
+}
+
+function PaginationBar({
+  currentPage,
+  totalPages,
+  filteredCount,
+  onPrev,
+  onNext,
+  onPaginate,
+  getPageNumbers,
+  disabled,
+}) {
+  return (
+    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+      <p className="text-xs text-slate-600">
+        Page <span className="font-semibold">{currentPage}</span> /{" "}
+        <span className="font-semibold">{totalPages}</span>
+        {" · "}
+        <span className="font-semibold">{filteredCount}</span> rows
+      </p>
+      <div className="flex flex-wrap items-center gap-2">
+        <button
+          onClick={onPrev}
+          disabled={currentPage <= 1 || disabled}
+          className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium disabled:opacity-40 hover:bg-slate-50"
+        >
+          ◀ Prev
+        </button>
+        <div className="flex items-center gap-1">
+          {getPageNumbers().map((p, idx) =>
+            p === "..." ? (
+              <span key={`dots-${idx}`} className="px-2 text-xs text-slate-400">
+                ...
+              </span>
+            ) : (
+              <button
+                key={p}
+                onClick={() => onPaginate(p)}
+                disabled={disabled}
+                className={`min-w-[32px] px-2 py-1.5 rounded-lg border text-xs font-medium ${
+                  p === currentPage
+                    ? "bg-slate-900 text-white border-slate-900"
+                    : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                }`}
+              >
+                {p}
+              </button>
+            )
+          )}
+        </div>
+        <button
+          onClick={onNext}
+          disabled={currentPage >= totalPages || disabled}
+          className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium disabled:opacity-40 hover:bg-slate-50"
+        >
+          Next ▶
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function DetailField({ label, children, full = false }) {
+  return (
+    <div
+      className={`rounded-lg border border-slate-200 p-3 bg-slate-50/50 ${
+        full ? "col-span-2" : ""
+      }`}
+    >
+      <h3 className="text-[11px] font-medium text-slate-400 uppercase tracking-wide">
+        {label}
+      </h3>
+      {children}
+    </div>
+  );
+}
+
+function ReportSubtotals({ pageIQD, pageUSD, currentPage }) {
+  return (
+    <div className="border-t border-slate-200 bg-slate-50 px-4 sm:px-6 py-4 pointer-events-none select-none">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div>
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+            Page Subtotal
+          </p>
+          <p className="text-[11px] text-slate-400 mt-0.5">Page {currentPage} only</p>
+        </div>
+        <div className="flex flex-wrap gap-3">
+          <div className="min-w-[160px] rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400 mb-1">
+              IQD
+            </p>
+            <p className="text-base font-bold text-slate-900 tabular-nums">
+              {pageIQD.toLocaleString()}{" "}
+              <span className="text-xs font-semibold text-slate-500">IQD</span>
+            </p>
+          </div>
+          <div className="min-w-[160px] rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm">
+            <p className="text-[10px] font-medium uppercase tracking-wide text-slate-400 mb-1">
+              USD
+            </p>
+            <p className="text-base font-bold text-slate-900 tabular-nums">
+              {pageUSD.toLocaleString()}{" "}
+              <span className="text-xs font-semibold text-slate-500">USD</span>
+            </p>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function HoverAction({ icon: Icon, label, onClick, variant = "default", disabled = false }) {
+  const styles = {
+    default: "text-slate-500 hover:text-slate-900 hover:bg-slate-200",
+    success: "text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50",
+    danger: "text-red-500 hover:text-red-600 hover:bg-red-50",
+  };
+
+  return (
+    <button
+      type="button"
+      title={label}
+      disabled={disabled}
+      onClick={onClick}
+      className={`p-2 rounded-lg transition-all duration-200 disabled:opacity-30 disabled:cursor-not-allowed ${styles[variant]}`}
+    >
+      <Icon className="text-sm" />
+    </button>
+  );
+}
+
+function ReportTableRow({
+  ticket,
+  isBayan,
+  isAdminUser,
+  onOpen,
+  onToggleStatus,
+  onMarkPaid,
+  onDelete,
+}) {
+  const actionCount = 2 + (isAdminUser ? 2 : 0);
+
+  return (
+    <tr
+      onClick={() => onOpen(ticket)}
+      className="group cursor-pointer even:bg-slate-50/50 hover:bg-slate-100/90 transition-colors"
+    >
+      <td className="px-4 py-3 font-medium text-slate-800 max-w-[160px] truncate group-hover:text-slate-950">
+        {ticket.title}
+      </td>
+      <td
+        className="px-4 py-3 text-slate-600 max-w-[200px] truncate"
+        title={ticket.description}
+      >
+        {ticket.description || "—"}
+      </td>
+      <td className="px-4 py-3 text-slate-700">{ticket.assignedTo || "—"}</td>
+      <td className="px-4 py-3 text-slate-700">{ticket.createdBy || "—"}</td>
+      <td className="px-4 py-3 text-slate-700">{ticket.company || "—"}</td>
+      <td className="px-4 py-3">
+        <PriorityBadge priority={ticket.priority} />
+      </td>
+      <td className="px-4 py-3 text-slate-600 whitespace-nowrap">
+        {ticket.dueDate?.slice(0, 10) || "—"}
+      </td>
+      <td className="px-4 py-3 text-slate-600 text-xs whitespace-nowrap">
+        {ticket.doneAt ? new Date(ticket.doneAt).toLocaleString() : "—"}
+      </td>
+      <td className="px-4 py-3">
+        <StatusBadge status={ticket.status} />
+      </td>
+      <td className="px-4 py-3">
+        <PaidBadge paid={ticket.paid} />
+      </td>
+      <td className="px-4 py-3 text-right font-semibold text-slate-800 whitespace-nowrap">
+        {isBayan
+          ? "*****"
+          : ticket.rate
+          ? `${Number(ticket.rate).toLocaleString()} ${ticket.currency || ""}`
+          : "—"}
+      </td>
+      <td
+        className="px-2 py-3 align-middle w-[148px] min-w-[148px] max-w-[148px]"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <div
+          className="flex items-center justify-end gap-0.5 h-8"
+          style={{ width: actionCount * 36 }}
+        >
+          <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150 pointer-events-none group-hover:pointer-events-auto">
+            <HoverAction
+              icon={FaEye}
+              label="View details"
+              onClick={() => onOpen(ticket)}
+            />
+            <HoverAction
+              icon={FaCheck}
+              label={ticket.status === "done" ? "Reopen" : "Mark done"}
+              variant="success"
+              onClick={() => onToggleStatus(ticket)}
+            />
+            {isAdminUser && (
+              <HoverAction
+                icon={FaMoneyBillWave}
+                label="Mark paid"
+                variant="success"
+                disabled={ticket.paid === "yes"}
+                onClick={() => onMarkPaid(ticket)}
+              />
+            )}
+            {isAdminUser && (
+              <HoverAction
+                icon={AiOutlineDelete}
+                label="Delete"
+                variant="danger"
+                onClick={() => onDelete(ticket)}
+              />
+            )}
+          </div>
+        </div>
+      </td>
+    </tr>
   );
 }

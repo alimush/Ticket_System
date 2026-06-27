@@ -1,148 +1,126 @@
 "use client";
-import { useState, useEffect } from "react";
+
+import { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { FaTrash } from "react-icons/fa";
+import { FaPlus, FaSearch, FaTicketAlt } from "react-icons/fa";
 import {
   getCurrentUser,
-  canCreateTicket,
   canDeleteTicket,
   canMarkDone,
   canViewTicket,
 } from "@/lib/permissions";
-import Select from "react-select";
+import TicketCard from "@/components/tickets/TicketCard";
+import CreateTicketModal from "@/components/tickets/CreateTicketModal";
+import LoadingSpinner from "@/components/LoadingSpinner";
+import { StatusBadge } from "@/components/tickets/TicketBadges";
+
+const STATUS_TABS = [
+  { key: "all", label: "All" },
+  { key: "open", label: "Open" },
+  { key: "in_progress", label: "In Progress" },
+  { key: "done", label: "Done" },
+];
+
+const TICKETS_PER_PAGE = 50;
 
 export default function CreateTicketPage() {
   const [tickets, setTickets] = useState([]);
   const [users, setUsers] = useState([]);
+  const [companies, setCompanies] = useState([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedTicket, setSelectedTicket] = useState(null);
-  const [companies, setCompanies] = useState([]);   // قائمة الشركات
-const [company, setCompany] = useState("");       // الشركة المختارة
-const [paid, setPaid] = useState(false);
-const [status, setStatus] = useState("open");
-const [doneAt, setDoneAt] = useState(null);
-const [rate, setRate] = useState(""); // 🟢 بالبداية فارغ
-const [currency, setCurrency] = useState("IQD");
-const [isEditing, setIsEditing] = useState(false);
-const [editForm, setEditForm] = useState({});
-const [loading, setLoading] = useState(false);
-  // 🟢 current user (from permissions.js)
+  const [creating, setCreating] = useState(false);
+  const [ticketsLoading, setTicketsLoading] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
-  
+  const [searchQuery, setSearchQuery] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState({});
 
-  useEffect(() => {
-    if (typeof window !== "undefined") {
-      setCurrentUser(getCurrentUser());
-    }
-  }, []);
-  useEffect(() => {
-    if (status === "done") {
-      setDoneAt(new Date().toISOString());
-    } else {
-      setDoneAt(null);
-    }
-  }, [status]);
   // form fields
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [assignedTo, setAssignedTo] = useState("");
   const [priority, setPriority] = useState("medium");
   const [dueDate, setDueDate] = useState("");
+  const [company, setCompany] = useState("");
+  const [rate, setRate] = useState("");
+  const [currency, setCurrency] = useState("IQD");
+
   const isBayan =
-  (currentUser?.username || currentUser?.name || "").toLowerCase() === "bayan";
-  // fetch tickets
-  const fetchTickets = async () => {
-    const res = await fetch("/api/tickets");
-    const data = await res.json();
+    (currentUser?.username || currentUser?.name || "").toLowerCase() === "bayan";
 
-    let allTickets = Array.isArray(data) ? data : [];
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      setCurrentUser(getCurrentUser());
+    }
+  }, []);
 
-    // 🟢 filter using canViewTicket
-    allTickets = allTickets.filter((t) => canViewTicket(currentUser, t));
-
-    setTickets(allTickets);
-  };
-  
-
-  // fetch users
-  const fetchUsers = async () => {
+  const fetchTickets = async (user = currentUser) => {
+    if (!user) return;
     try {
-      const res = await fetch("/api/users");
+      setTicketsLoading(true);
+      const res = await fetch("/api/tickets");
       const data = await res.json();
-      setUsers(Array.isArray(data.users) ? data.users : []);
+      let allTickets = Array.isArray(data) ? data : [];
+      allTickets = allTickets.filter((t) => canViewTicket(user, t));
+      setTickets(allTickets);
     } catch (err) {
-      console.error("❌ Error fetching users:", err);
-      setUsers([]);
+      console.error("❌ Error fetching tickets:", err);
+    } finally {
+      setTicketsLoading(false);
     }
   };
 
   useEffect(() => {
     const loadData = async () => {
       if (!currentUser) return;
-    
-      // 🟢 tickets
-      const resTickets = await fetch("/api/tickets");
-      const ticketsData = await resTickets.json();
-      let allTickets = Array.isArray(ticketsData) ? ticketsData : [];
-      allTickets = allTickets.filter((t) => canViewTicket(currentUser, t));
-      setTickets(allTickets);
-    
-      // 🟢 users
-      const resUsers = await fetch("/api/users");
-      const usersData = await resUsers.json();
-      setUsers(Array.isArray(usersData.users) ? usersData.users : []);
-    
-      // 🟢 companies
-      const resCompanies = await fetch("/api/companies");
-      const companiesData = await resCompanies.json();
-      setCompanies(Array.isArray(companiesData) ? companiesData : []);
+
+      try {
+        setTicketsLoading(true);
+        const [ticketsRes, usersRes, companiesRes] = await Promise.all([
+          fetch("/api/tickets"),
+          fetch("/api/users"),
+          fetch("/api/companies"),
+        ]);
+
+        const ticketsData = await ticketsRes.json();
+        const usersData = await usersRes.json();
+        const companiesData = await companiesRes.json();
+
+        let allTickets = Array.isArray(ticketsData) ? ticketsData : [];
+        allTickets = allTickets.filter((t) => canViewTicket(currentUser, t));
+        setTickets(allTickets);
+        setUsers(Array.isArray(usersData.users) ? usersData.users : []);
+        setCompanies(Array.isArray(companiesData) ? companiesData : []);
+      } catch (err) {
+        console.error("❌ Error loading data:", err);
+      } finally {
+        setTicketsLoading(false);
+      }
     };
-  
+
     loadData();
   }, [currentUser]);
-  const fetchCompanies = async () => {
-    try {
-      const res = await fetch("/api/companies");
-      const data = await res.json();
-      setCompanies(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("❌ Error fetching companies:", err);
-      setCompanies([]);
-      
-    }
-  };
-  const handleUpdate = async (e) => {
-    e.preventDefault();
-    const res = await fetch(`/api/tickets/${selectedTicket._id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...editForm,
-        rate: editForm.rate ? Number(editForm.rate.replace(/,/g, "")) : null,
-      }),
-    });
-  
-    if (res.ok) {
-      const updated = await res.json();
-      setTickets((prev) =>
-        prev.map((t) => (t._id === updated._id ? updated : t))
-      );
-      setSelectedTicket(null);
-      setIsEditing(false);
-    }
+
+  const resetCreateForm = () => {
+    setTitle("");
+    setDescription("");
+    setAssignedTo("");
+    setPriority("medium");
+    setDueDate("");
+    setCompany("");
+    setRate("");
+    setCurrency("IQD");
   };
 
-  // create ticket
   const handleCreate = async (e) => {
     e.preventDefault();
-  
-    if (loading) return;
-  
+    if (creating || !currentUser) return;
+
     try {
-      setLoading(true);
-  
-      const createdBy = currentUser.username;
-  
+      setCreating(true);
       const res = await fetch("/api/tickets", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -152,35 +130,28 @@ const [loading, setLoading] = useState(false);
           assignedTo: assignedTo || null,
           priority,
           dueDate,
-          createdBy,
+          createdBy: currentUser.username,
           company,
           paid: "no",
-          doneAt,
+          doneAt: null,
           rate: isBayan ? null : rate ? Number(rate.replace(/,/g, "")) : null,
           currency,
         }),
       });
-  
+
       if (res.ok) {
         setIsModalOpen(false);
-        setTitle("");
-        setDescription("");
-        setAssignedTo("");
-        setPriority("medium");
-        setDueDate("");
-        setCompany("");
-        setRate("");
-        setCurrency("IQD");
+        resetCreateForm();
+        setCurrentPage(1);
         fetchTickets();
       }
     } catch (err) {
       console.error("❌ Error creating ticket:", err);
     } finally {
-      setLoading(false);
+      setCreating(false);
     }
   };
 
-  // mark as done
   const markAsDone = async (id) => {
     await fetch(`/api/tickets/${id}`, {
       method: "PATCH",
@@ -190,669 +161,648 @@ const [loading, setLoading] = useState(false);
     fetchTickets();
   };
 
-  // delete ticket
   const deleteTicket = async (id) => {
     if (!confirm("Are you sure you want to delete this ticket?")) return;
     await fetch(`/api/tickets/${id}`, { method: "DELETE" });
     fetchTickets();
   };
 
-  // animations
-  const container = {
-    hidden: { opacity: 0 },
-    show: { opacity: 1, transition: { staggerChildren: 0.15 } },
-  };
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, statusFilter]);
 
-  const card = {
-    hidden: { opacity: 0, y: 40, scale: 0.95 },
-    show: {
-      opacity: 1,
-      y: 0,
-      scale: 1,
-      transition: { type: "spring", stiffness: 100, damping: 15 },
-    },
-  };
+  const statusCounts = useMemo(() => {
+    const counts = { all: tickets.length, open: 0, in_progress: 0, done: 0 };
+    tickets.forEach((t) => {
+      if (counts[t.status] !== undefined) counts[t.status]++;
+    });
+    return counts;
+  }, [tickets]);
 
-  // group tickets by due date
-  const groupedTickets = tickets.reduce((acc, ticket) => {
-    const date = ticket.dueDate ? ticket.dueDate.slice(0, 10) : "No Date";
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(ticket);
-    return acc;
-  }, {});
+  const filteredTickets = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    return tickets.filter((t) => {
+      if (statusFilter !== "all" && t.status !== statusFilter) return false;
+      if (!q) return true;
+      return (
+        t.title?.toLowerCase().includes(q) ||
+        t.description?.toLowerCase().includes(q)
+      );
+    });
+  }, [tickets, statusFilter, searchQuery]);
 
-  return (
-    <div className="min-h-screen w-full overflow-x-hidden bg-gradient-to-br from-gray-50 via-gray-100 to-gray-200 p-6">
-      {/* Header */}
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-2xl font-bold text-gray-800">Tickets</h1>
-        
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="bg-gray-800 text-white font-medium px-6 py-2 rounded-lg hover:bg-gray-700 transition"
-          >
-            + Create Ticket
-          </button>
+  const sortedFiltered = useMemo(() => {
+    return [...filteredTickets].sort((a, b) => {
+      const aTime = new Date(a.updatedAt || a.createdAt).getTime();
+      const bTime = new Date(b.updatedAt || b.createdAt).getTime();
+      return bTime - aTime;
+    });
+  }, [filteredTickets]);
 
-      </div>
-      
+  const totalPages = Math.max(
+    1,
+    Math.ceil(sortedFiltered.length / TICKETS_PER_PAGE)
+  );
 
-      {/* Tickets grouped by date */}
-      <div className="space-y-10">
-        {Object.entries(groupedTickets).map(([date, group], idx) => (
-          <div
-            key={date}
-            className={`pt-6 ${idx > 0 ? "border-t border-gray-300" : ""}`}
-          >
-            <h2 className="text-lg font-semibold text-gray-700 mb-4 flex items-center gap-2">
-              {date}
-              <span className="bg-gray-200 text-gray-700 text-xs px-2 py-0.5 rounded-full">
-                {group.length} tickets
-              </span>
-            </h2>
+  useEffect(() => {
+    if (currentPage > totalPages) {
+      setCurrentPage(totalPages);
+    }
+  }, [currentPage, totalPages]);
 
-            <motion.div
-              variants={container}
-              initial="hidden"
-              animate="show"
-              className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6"
-            >
-              <AnimatePresence>
-                {group.map((ticket) => (
-           <motion.div
-           key={ticket._id}
-           variants={card}
-           exit={{ opacity: 0, scale: 0.9 }}
-           onClick={() => setSelectedTicket(ticket)}
-           className={`p-5 rounded-xl border shadow-md transition hover:shadow-xl cursor-pointer relative
-             ${
-               ticket.status === "done"
-                 ? "bg-gray-100 text-gray-400 border-gray-200"
-                 : "bg-white text-gray-800 border-gray-300"
-             }`}
-         >
-           {/* زر الحذف */}
-           {canDeleteTicket(currentUser) && (
-             <button
-               onClick={(e) => {
-                 e.stopPropagation();
-                 deleteTicket(ticket._id);
-               }}
-               className="absolute top-3 right-3 text-gray-400 hover:text-red-500"
-             >
-               <FaTrash />
-             </button>
-           )}
-         
-           {/* العنوان */}
-           <h2 className="font-bold text-lg mb-2">{ticket.title}</h2>
-         
-           {/* معلومات */}
-           <p className="text-sm font-bold">
-             Assigned To:{" "}
-             <span className="font-normal text-gray-700">{ticket.assignedTo || "—"}</span>
-           </p>
-           <p className="text-sm font-bold">
-             Company:{" "}
-             <span className="font-normal text-gray-600">{ticket.company || "—"}</span>
-           </p>
-         
-           {/* Paid Badge */}
-           <div className="mt-2">
-             <span className="text-sm font-bold">Paid: </span>
-             <span
-               className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                 ticket.paid === "yes"
-                   ? "bg-green-100 text-green-700"
-                   : "bg-red-100 text-red-700"
-               }`}
-             >
-               {ticket.paid === "yes" ? "Yes" : "No"}
-             </span>
-           </div>
-         
-           {/* Status Badge */}
-           <div className="mt-2">
-             <span className="text-sm font-bold">Status: </span>
-             <span
-               className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                 ticket.status === "done"
-                   ? "bg-green-100 text-green-700"
-                   : ticket.status === "open"
-                   ? "bg-yellow-100 text-yellow-700"
-                   : "bg-yellow-100 text-yellow-700"
-               }`}
-             >
-               {ticket.status}
-             </span>
-           </div>
-         
-           {/* Done At */}
-           <p className="text-xs mt-3 font-bold">
-             Done At:{" "}
-             <span className="font-normal text-gray-500">
-               {ticket.doneAt ? new Date(ticket.doneAt).toLocaleDateString() : "—"}
-             </span>
-           </p>
-         </motion.div>
-                ))}
-              </AnimatePresence>
-            </motion.div>
-          </div>
-        ))}
-      </div>
+  const paginatedTickets = useMemo(() => {
+    const start = (currentPage - 1) * TICKETS_PER_PAGE;
+    return sortedFiltered.slice(start, start + TICKETS_PER_PAGE);
+  }, [sortedFiltered, currentPage]);
 
-      {/* Create Ticket Modal */}
-      {isModalOpen && (
-        <div className="fixed inset-0 bg-black/60 flex items-center justify-center   p-4">
-         <motion.div
-  initial={{ y: 40, opacity: 0 }}
-  animate={{ y: 0, opacity: 1 }}
-  exit={{ y: 40, opacity: 0 }}
-  transition={{ duration: 0.3 }}
-  className="bg-white rounded-2xl shadow-2xl w-full mt-24 max-w-lg max-h-[80vh] overflow-y-auto"
->
-            <div className="bg-gradient-to-r from-gray-800 via-gray-700 to-gray-900 px-6 py-3">
-              <h2 className="text-lg font-semibold text-white">
-                Create New Ticket
-              </h2>
-            </div>
+  // Date headers follow recency order within each page (not sorted by due date)
+  const groupedByDate = useMemo(() => {
+    const result = [];
+    let currentDate = null;
+    let currentGroup = [];
 
-            <form onSubmit={handleCreate} className="p-6 space-y-4 text-sm">
-              <div>
-                <label className="block text-gray-700 mb-1">Title</label>
-                <input
-                  type="text"
-                  className="w-full border rounded-lg p-2 bg-gray-50 border-gray-300 text-gray-900"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-gray-700 mb-1">Description</label>
-                <textarea
-                  className="w-full border rounded-lg p-2 bg-gray-50 border-gray-300 text-gray-900"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="block text-gray-700 mb-1">Assigned To</label>
-                <select
-                  className="w-full border rounded-lg p-2 bg-gray-50 border-gray-300 text-gray-900"
-                  value={assignedTo}
-                  onChange={(e) => setAssignedTo(e.target.value)}
-                  
-                >
-                  <option value="">Select user</option>
-                  {users.map((user) => (
-                    <option key={user._id} value={user.username}>
-                      {user.username}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div>
-  <label className="block text-gray-700 mb-1">Rate</label>
-  <input
-  type="text"
-  className={`w-full border rounded-lg p-2 ${
-    isBayan
-      ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
-      : "bg-gray-50 border-gray-300 text-gray-900"
-  }`}
-  value={isBayan ? "*****" : rate}
-  onChange={(e) => {
-    if (isBayan) return;
-
-    let raw = e.target.value.replace(/,/g, "");
-
-    if (raw === "-") {
-      setRate("-");
-      return;
+    for (const ticket of paginatedTickets) {
+      const date = ticket.dueDate ? ticket.dueDate.slice(0, 10) : "No Date";
+      if (date !== currentDate) {
+        if (currentGroup.length) result.push([currentDate, currentGroup]);
+        currentDate = date;
+        currentGroup = [ticket];
+      } else {
+        currentGroup.push(ticket);
+      }
     }
 
-    if (isNaN(raw)) return;
+    if (currentGroup.length) result.push([currentDate, currentGroup]);
+    return result;
+  }, [paginatedTickets]);
 
-    const num = Number(raw);
-    setRate(num.toLocaleString());
-  }}
-  placeholder={isBayan ? "No access" : "Enter amount..."}
-  disabled={isBayan}
-  readOnly={isBayan}
-/>
-</div>
-             
-  <div>
-    <label className="block text-gray-700 mb-1">Currency</label>
-    <select
-  className={`w-full border rounded-lg p-2 ${
-    isBayan
-      ? "bg-gray-100 border-gray-200 text-gray-400 cursor-not-allowed"
-      : "bg-gray-50 border-gray-300 text-gray-900"
-  }`}
-  value={currency}
-  onChange={(e) => {
-    if (isBayan) return;
-    setCurrency(e.target.value);
-  }}
-  disabled={isBayan}
->
-      <option value="USD">USD</option>
-      <option value="IQD">IQD</option>
+  const paginatedTicketCount = paginatedTickets.length;
 
-    </select>
-  </div>
-<div>
-  <label className="block text-gray-700 mb-1">Company</label>
-  <Select
-  options={companies.map((c) =>
-    typeof c === "string"
-      ? { value: c, label: c }
-      : { value: c.name || c.companyName, label: c.name || c.companyName }
-  )}
-  value={company ? { value: company, label: company } : null}
-  onChange={(option) => {
-    console.log("Selected company:", option);
-    setCompany(option ? option.value : "");
-  }}
-  placeholder="Select company..."
-  isClearable
-  className="text-sm"
-  menuPlacement="auto"
-  menuPortalTarget={typeof window !== "undefined" ? document.body : null}
-  styles={{
-    menuPortal: (base) => ({ ...base, zIndex: 9999 }),
-    menuList: (base) => ({
-      ...base,
-      maxHeight: 120,
-      overflowY: "auto",
-    }),
-  }}
-/>
-</div>
+  const paginate = (page) =>
+    setCurrentPage(Math.min(Math.max(1, page), totalPages));
 
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-gray-700 mb-1">Priority</label>
-                  <select
-                    className="w-full border rounded-lg p-2 bg-gray-50 border-gray-300 text-gray-900"
-                    value={priority}
-                    onChange={(e) => setPriority(e.target.value)}
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxButtons = 7;
+    if (totalPages <= maxButtons) {
+      for (let i = 1; i <= totalPages; i++) pages.push(i);
+      return pages;
+    }
+    const left = Math.max(1, currentPage - 2);
+    const right = Math.min(totalPages, currentPage + 2);
+    pages.push(1);
+    if (left > 2) pages.push("...");
+    for (let i = left; i <= right; i++) {
+      if (i !== 1 && i !== totalPages) pages.push(i);
+    }
+    if (right < totalPages - 1) pages.push("...");
+    if (totalPages > 1) pages.push(totalPages);
+    return pages;
+  };
+
+  return (
+    <div className="max-w-7xl mx-auto space-y-6">
+      {/* Toolbar */}
+      <div className="flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-800">Tickets</h1>
+            <p className="text-sm text-slate-500 mt-0.5">
+              {tickets.length} total · {filteredTickets.length} matched
+              {filteredTickets.length > 0 &&
+                ` · Page ${currentPage}/${totalPages}`}
+            </p>
+          </div>
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="inline-flex items-center justify-center gap-2 bg-slate-900 text-white font-medium px-5 py-2.5 rounded-xl hover:bg-slate-800 transition shadow-sm"
+          >
+            <FaPlus className="text-sm" />
+            Create Ticket
+          </button>
+        </div>
+
+        <div className="flex flex-col lg:flex-row lg:items-center gap-3">
+          {/* Search */}
+          <div className="relative flex-1 max-w-md">
+            <FaSearch className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm" />
+            <input
+              type="text"
+              placeholder="Search by title or description..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-full pl-9 pr-4 py-2.5 text-sm border border-slate-200 rounded-xl bg-white text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-300"
+            />
+          </div>
+
+          {/* Status tabs */}
+          <div className="flex flex-wrap gap-1.5 p-1 bg-slate-100 rounded-xl">
+            {STATUS_TABS.map((tab) => (
+              <button
+                key={tab.key}
+                onClick={() => setStatusFilter(tab.key)}
+                className={`px-3.5 py-2 rounded-lg text-xs font-semibold transition ${
+                  statusFilter === tab.key
+                    ? "bg-white text-slate-900 shadow-sm"
+                    : "text-slate-500 hover:text-slate-700"
+                }`}
+              >
+                {tab.label}
+                <span className="ml-1.5 text-slate-400">{statusCounts[tab.key]}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Pagination */}
+      {!ticketsLoading && filteredTickets.length > 0 && (
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 px-1">
+          <p className="text-xs text-slate-600">
+            Page <span className="font-semibold">{currentPage}</span> /{" "}
+            <span className="font-semibold">{totalPages}</span>
+            {" · "}
+            Showing{" "}
+            <span className="font-semibold">{paginatedTicketCount}</span> of{" "}
+            <span className="font-semibold">{filteredTickets.length}</span> tickets
+          </p>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => paginate(currentPage - 1)}
+              disabled={currentPage <= 1}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 disabled:opacity-40 hover:bg-slate-50 transition"
+            >
+              ◀ Prev
+            </button>
+            <div className="flex items-center gap-1">
+              {getPageNumbers().map((p, idx) =>
+                p === "..." ? (
+                  <span key={`dots-${idx}`} className="px-2 text-xs text-slate-400">
+                    ...
+                  </span>
+                ) : (
+                  <button
+                    key={p}
+                    onClick={() => paginate(p)}
+                    className={`min-w-[32px] px-2 py-1.5 rounded-lg border text-xs font-medium transition ${
+                      p === currentPage
+                        ? "bg-slate-900 text-white border-slate-900"
+                        : "bg-white text-slate-700 border-slate-200 hover:bg-slate-50"
+                    }`}
                   >
-                    <option value="low">Low</option>
-                    <option value="medium">Medium</option>
-                    <option value="high">High</option>
-                  </select>
+                    {p}
+                  </button>
+                )
+              )}
+            </div>
+            <button
+              onClick={() => paginate(currentPage + 1)}
+              disabled={currentPage >= totalPages}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 disabled:opacity-40 hover:bg-slate-50 transition"
+            >
+              Next ▶
+            </button>
+            <input
+              type="number"
+              min={1}
+              max={totalPages}
+              value={currentPage}
+              onChange={(e) => paginate(Number(e.target.value || 1))}
+              className="w-16 px-2 py-1.5 rounded-lg border border-slate-200 text-xs bg-white text-slate-900"
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Tickets grouped by due date */}
+      {ticketsLoading ? (
+        <LoadingSpinner message="Loading tickets..." />
+      ) : filteredTickets.length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center">
+          <div className="w-16 h-16 rounded-2xl bg-slate-100 flex items-center justify-center mb-4">
+            <FaTicketAlt className="text-2xl text-slate-400" />
+          </div>
+          <h3 className="text-lg font-semibold text-slate-700 mb-1">No tickets found</h3>
+          <p className="text-sm text-slate-500 mb-5 max-w-sm">
+            {searchQuery || statusFilter !== "all"
+              ? "Try adjusting your search or filters."
+              : "Create your first ticket to get started."}
+          </p>
+          {!searchQuery && statusFilter === "all" && (
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="inline-flex items-center gap-2 bg-slate-900 text-white text-sm font-medium px-5 py-2.5 rounded-xl hover:bg-slate-800 transition"
+            >
+              <FaPlus className="text-xs" />
+              Create Ticket
+            </button>
+          )}
+        </div>
+      ) : (
+        <motion.div
+          key={currentPage}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ duration: 0.25 }}
+          className="space-y-10"
+        >
+          {(() => {
+            let cardIndex = 0;
+            return groupedByDate.map(([date, group], idx) => (
+              <motion.div
+                key={`${currentPage}-${idx}-${date}`}
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.35, delay: idx * 0.06 }}
+                className={`pt-2 ${idx > 0 ? "border-t border-slate-200" : ""}`}
+              >
+                <h2 className="text-base font-semibold text-slate-700 mb-4 flex items-center gap-2">
+                  {date}
+                  <span className="bg-slate-100 text-slate-600 text-xs font-medium px-2.5 py-0.5 rounded-full">
+                    {group.length} tickets
+                  </span>
+                </h2>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {group.map((ticket) => {
+                    const index = cardIndex++;
+                    return (
+                      <TicketCard
+                        key={ticket._id}
+                        ticket={ticket}
+                        index={index}
+                        hideRate={isBayan}
+                        canDelete={canDeleteTicket(currentUser)}
+                        onClick={() => setSelectedTicket(ticket)}
+                        onDelete={deleteTicket}
+                      />
+                    );
+                  })}
                 </div>
-                <div>
-                  <label className="block text-gray-700 mb-1">Due Date</label>
+              </motion.div>
+            ));
+          })()}
+        </motion.div>
+      )}
+
+      {/* Bottom pagination */}
+      {totalPages > 1 && (
+        <div className="flex justify-center pt-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => paginate(currentPage - 1)}
+              disabled={currentPage <= 1}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 disabled:opacity-40 hover:bg-slate-50 transition"
+            >
+              ◀ Prev
+            </button>
+            <span className="text-xs text-slate-600 px-2">
+              Page {currentPage} / {totalPages}
+            </span>
+            <button
+              onClick={() => paginate(currentPage + 1)}
+              disabled={currentPage >= totalPages}
+              className="px-3 py-1.5 rounded-lg border border-slate-200 bg-white text-xs font-medium text-slate-700 disabled:opacity-40 hover:bg-slate-50 transition"
+            >
+              Next ▶
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Create Ticket Modal */}
+      <AnimatePresence>
+        {isModalOpen && (
+          <CreateTicketModal
+            isOpen={isModalOpen}
+            onClose={() => {
+              setIsModalOpen(false);
+              resetCreateForm();
+            }}
+            onSubmit={handleCreate}
+            loading={creating}
+            title={title}
+            setTitle={setTitle}
+            description={description}
+            setDescription={setDescription}
+            assignedTo={assignedTo}
+            setAssignedTo={setAssignedTo}
+            company={company}
+            setCompany={setCompany}
+            priority={priority}
+            setPriority={setPriority}
+            dueDate={dueDate}
+            setDueDate={setDueDate}
+            rate={rate}
+            setRate={setRate}
+            currency={currency}
+            setCurrency={setCurrency}
+            users={users}
+            companies={companies}
+            isBayan={isBayan}
+          />
+        )}
+      </AnimatePresence>
+
+      {/* Ticket Details Modal */}
+      {selectedTicket && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm"
+          onClick={() => {
+            setIsEditing(false);
+            setSelectedTicket(null);
+          }}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.96, y: 16 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            transition={{ duration: 0.25 }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] flex flex-col overflow-hidden"
+          >
+            <div className="flex items-start justify-between px-6 py-4 border-b border-slate-200 bg-slate-900">
+              <div className="flex-1 min-w-0 pr-4">
+                <div className="flex flex-wrap items-center gap-2 mb-2">
+                  <StatusBadge status={selectedTicket.status} />
+                </div>
+                <h2 className="text-lg font-semibold text-white truncate">
+                  {selectedTicket.title}
+                </h2>
+              </div>
+              <button
+                onClick={() => {
+                  setIsEditing(false);
+                  setSelectedTicket(null);
+                }}
+                className="p-2 rounded-lg text-slate-400 hover:text-white hover:bg-slate-700 transition shrink-0"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6 text-sm text-slate-800 space-y-4">
+              {isEditing && (
+                <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50">
+                  <h3 className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-1">
+                    Title
+                  </h3>
                   <input
-                    type="date"
-                    className="w-full border rounded-lg p-2 bg-gray-50 border-gray-300 text-gray-900"
-                    value={dueDate}
-                    onChange={(e) => setDueDate(e.target.value)}
+                    type="text"
+                    className="w-full border border-slate-200 rounded-lg p-2 text-sm bg-white"
+                    value={editForm.title || ""}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, title: e.target.value })
+                    }
                   />
                 </div>
+              )}
+
+              <div className="grid grid-cols-2 gap-3">
+                {[
+                  { label: "Assigned To", key: "assignedTo", type: "text" },
+                  { label: "Company", key: "company", type: "text" },
+                  { label: "Priority", key: "priority", type: "select" },
+                  { label: "Due Date", key: "dueDate", type: "date" },
+                ].map(({ label, key, type }) => (
+                  <div key={key} className="rounded-lg border border-slate-200 p-3 bg-slate-50/50">
+                    <h3 className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-1">
+                      {label}
+                    </h3>
+                    {isEditing ? (
+                      type === "select" ? (
+                        <select
+                          className="w-full border border-slate-200 rounded-lg p-1.5 text-sm bg-white"
+                          value={editForm[key] || "medium"}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, [key]: e.target.value })
+                          }
+                        >
+                          <option value="low">Low</option>
+                          <option value="medium">Medium</option>
+                          <option value="high">High</option>
+                        </select>
+                      ) : (
+                        <input
+                          type={type}
+                          className="w-full border border-slate-200 rounded-lg p-1.5 text-sm bg-white"
+                          value={editForm[key] || ""}
+                          onChange={(e) =>
+                            setEditForm({ ...editForm, [key]: e.target.value })
+                          }
+                        />
+                      )
+                    ) : (
+                      <p className="font-medium text-slate-800">
+                        {key === "dueDate"
+                          ? selectedTicket.dueDate?.slice(0, 10) || "—"
+                          : selectedTicket[key] || "—"}
+                      </p>
+                    )}
+                  </div>
+                ))}
               </div>
 
-              <div className="flex justify-end gap-2 pt-4 border-t">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
-                >
-                  Cancel
-                </button>
-                <button
-  type="submit"
-  disabled={loading}
-  className={`px-4 py-2 text-white rounded-lg transition
-    ${loading ? "bg-gray-400 cursor-not-allowed" : "bg-blue-600 hover:bg-blue-700"}`}
->
-  {loading ? "Loading..." : "Create"}
-</button>
+              <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50">
+                <h3 className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-1">
+                  Description
+                </h3>
+                {isEditing ? (
+                  <textarea
+                    className="w-full border border-slate-200 rounded-lg p-2 text-sm bg-white min-h-[80px]"
+                    value={editForm.description || ""}
+                    onChange={(e) =>
+                      setEditForm({ ...editForm, description: e.target.value })
+                    }
+                  />
+                ) : (
+                  <p className="text-slate-700 whitespace-pre-wrap">
+                    {selectedTicket.description || "—"}
+                  </p>
+                )}
               </div>
-            </form>
+
+              <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50">
+                <h3 className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-1">
+                  Rate
+                </h3>
+                {isEditing ? (
+                  <input
+                    type="text"
+                    className={`w-full border border-slate-200 rounded-lg p-1.5 text-sm bg-white ${
+                      isBayan ? "bg-slate-100 text-slate-400 cursor-not-allowed" : ""
+                    }`}
+                    value={isBayan ? "*****" : editForm.rate || ""}
+                    onChange={(e) => {
+                      if (!isBayan) setEditForm({ ...editForm, rate: e.target.value });
+                    }}
+                    disabled={isBayan}
+                    readOnly={isBayan}
+                  />
+                ) : (
+                  <p className="font-medium text-slate-800">
+                    {isBayan
+                      ? "*****"
+                      : selectedTicket.rate
+                      ? `${selectedTicket.rate.toLocaleString()} ${selectedTicket.currency || ""}`
+                      : "—"}
+                  </p>
+                )}
+              </div>
+
+              {selectedTicket.status === "done" && selectedTicket.doneAt && (
+                <div className="rounded-lg border border-emerald-200 p-3 bg-emerald-50">
+                  <h3 className="text-[11px] font-medium text-emerald-600 uppercase tracking-wide mb-1">
+                    Done At
+                  </h3>
+                  <p className="font-medium text-emerald-800">
+                    {new Date(selectedTicket.doneAt).toLocaleString()}
+                  </p>
+                </div>
+              )}
+
+              <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50">
+                <h3 className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-2">
+                  Paid
+                </h3>
+                {currentUser?.role === "admin" ? (
+                  <div className="flex gap-2">
+                    {["yes", "no"].map((val) => (
+                      <button
+                        key={val}
+                        disabled={val === "no" && selectedTicket.paid === "yes"}
+                        onClick={async () => {
+                          const res = await fetch(`/api/tickets/${selectedTicket._id}`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ paid: val }),
+                          });
+                          if (res.ok) {
+                            const updated = await res.json();
+                            setSelectedTicket(updated);
+                            setTickets((prev) =>
+                              prev.map((t) => (t._id === updated._id ? updated : t))
+                            );
+                          }
+                        }}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition ${
+                          selectedTicket.paid === val
+                            ? val === "yes"
+                              ? "bg-emerald-600 text-white"
+                              : "bg-red-600 text-white"
+                            : val === "no" && selectedTicket.paid === "yes"
+                            ? "bg-slate-200 text-slate-400 cursor-not-allowed"
+                            : "bg-white border border-slate-200 text-slate-700 hover:bg-slate-50"
+                        }`}
+                      >
+                        {val === "yes" ? "Yes" : "No"}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="font-medium">
+                    {selectedTicket.paid === "yes" ? (
+                      <span className="px-2.5 py-1 text-xs rounded-full bg-emerald-100 text-emerald-700">
+                        Yes
+                      </span>
+                    ) : (
+                      <span className="px-2.5 py-1 text-xs rounded-full bg-slate-100 text-slate-600">
+                        No
+                      </span>
+                    )}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex justify-end gap-2 px-6 py-4 border-t border-slate-200 bg-slate-50">
+              {isEditing ? (
+                <>
+                  <button
+                    onClick={async () => {
+                      const res = await fetch(`/api/tickets/${selectedTicket._id}`, {
+                        method: "PATCH",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          ...editForm,
+                          assignedTo: editForm.assignedTo || null,
+                          rate: isBayan
+                            ? selectedTicket.rate ?? null
+                            : editForm.rate,
+                        }),
+                      });
+                      if (res.ok) {
+                        const updated = await res.json();
+                        setSelectedTicket(updated);
+                        setTickets((prev) =>
+                          prev.map((t) => (t._id === updated._id ? updated : t))
+                        );
+                        setIsEditing(false);
+                      }
+                    }}
+                    className="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800"
+                  >
+                    Save
+                  </button>
+                  <button
+                    onClick={() => setIsEditing(false)}
+                    className="px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50"
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  {selectedTicket.status !== "done" &&
+                    canMarkDone(currentUser, selectedTicket) && (
+                      <button
+                        onClick={() => {
+                          markAsDone(selectedTicket._id);
+                          setSelectedTicket(null);
+                        }}
+                        className="px-4 py-2 bg-emerald-600 text-white text-sm font-medium rounded-lg hover:bg-emerald-700"
+                      >
+                        Mark as Done
+                      </button>
+                    )}
+                  {currentUser?.role === "admin" && (
+                    <button
+                      onClick={() => {
+                        setEditForm({
+                          title: selectedTicket.title || "",
+                          description: selectedTicket.description || "",
+                          assignedTo: selectedTicket.assignedTo || "",
+                          priority: selectedTicket.priority || "medium",
+                          dueDate: selectedTicket.dueDate
+                            ? selectedTicket.dueDate.slice(0, 10)
+                            : "",
+                          company: selectedTicket.company || "",
+                          rate: selectedTicket.rate
+                            ? selectedTicket.rate.toString()
+                            : "",
+                          currency: selectedTicket.currency || "IQD",
+                        });
+                        setIsEditing(true);
+                      }}
+                      className="px-4 py-2 bg-slate-900 text-white text-sm font-medium rounded-lg hover:bg-slate-800"
+                    >
+                      Edit
+                    </button>
+                  )}
+                  <button
+                    onClick={() => {
+                      setIsEditing(false);
+                      setSelectedTicket(null);
+                    }}
+                    className="px-4 py-2 bg-white border border-slate-200 text-slate-700 text-sm font-medium rounded-lg hover:bg-slate-50"
+                  >
+                    Close
+                  </button>
+                </>
+              )}
+            </div>
           </motion.div>
         </div>
       )}
-
-      {/* Ticket Details */}
-      {selectedTicket && (
-  <div className="fixed inset-0 bg-black/60 flex items-center justify-center mt-12 p-4">
-    <motion.div
-      initial={{ y: 40, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      exit={{ y: 40, opacity: 0 }}
-      transition={{ duration: 0.3 }}
-      className="bg-white rounded-2xl shadow-2xl w-full max-w-xl overflow-hidden"
-    >
-      {/* Header */}
-      <div className="bg-gradient-to-r from-gray-800 via-gray-700 to-gray-900 px-6 py-3 flex justify-between items-center">
-        <h2 className="text-lg font-semibold text-white">Ticket Details</h2>
-        <button
-          onClick={() => {
-            setIsEditing(false); // ✅ نرجع للوضع العادي
-            setSelectedTicket(null);
-          }}
-          className="text-gray-300 hover:text-white transition"
-        >
-          ✕
-        </button>
-      </div>
-
-      {/* Content */}
-      <div className="p-6 text-sm text-gray-800 space-y-4">
-        <div className="grid grid-cols-2 gap-4">
-          {/* Title */}
-          <div className="border rounded-lg p-3">
-            <h3 className="text-xs text-gray-500">Title</h3>
-            {isEditing ? (
-              <input
-                type="text"
-                className="w-full border rounded p-1"
-                value={editForm.title || ""}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, title: e.target.value })
-                }
-              />
-            ) : (
-              <p className="font-medium">{selectedTicket.title}</p>
-            )}
-          </div>
-
-          {/* Assigned To */}
-          <div className="border rounded-lg p-3">
-            <h3 className="text-xs text-gray-500">Assigned To</h3>
-            {isEditing ? (
-              <input
-                type="text"
-                className="w-full border rounded p-1"
-                value={editForm.assignedTo || ""}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, assignedTo: e.target.value })
-                }
-              />
-            ) : (
-              <p className="font-medium">{selectedTicket.assignedTo || "—"}</p>
-            )}
-          </div>
-
-          {/* Priority */}
-          <div className="border rounded-lg p-3">
-            <h3 className="text-xs text-gray-500">Priority</h3>
-            {isEditing ? (
-              <select
-                className="w-full border rounded p-1"
-                value={editForm.priority || "medium"}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, priority: e.target.value })
-                }
-              >
-                <option value="low">Low</option>
-                <option value="medium">Medium</option>
-                <option value="high">High</option>
-              </select>
-            ) : (
-              <p className="font-medium">{selectedTicket.priority}</p>
-            )}
-          </div>
-
-          {/* Due Date */}
-          <div className="border rounded-lg p-3">
-            <h3 className="text-xs text-gray-500">Due Date</h3>
-            {isEditing ? (
-              <input
-                type="date"
-                className="w-full border rounded p-1"
-                value={editForm.dueDate || ""}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, dueDate: e.target.value })
-                }
-              />
-            ) : (
-              <p className="font-medium">
-                {selectedTicket.dueDate?.slice(0, 10) || "—"}
-              </p>
-            )}
-          </div>
-
-          {/* Company */}
-          <div className="border rounded-lg p-3">
-            <h3 className="text-xs text-gray-500">Company</h3>
-            {isEditing ? (
-              <input
-                type="text"
-                className="w-full border rounded p-1"
-                value={editForm.company || ""}
-                onChange={(e) =>
-                  setEditForm({ ...editForm, company: e.target.value })
-                }
-              />
-            ) : (
-              <p className="font-medium">{selectedTicket.company || "—"}</p>
-            )}
-          </div>
-        </div>
-
-        {/* Description */}
-        <div className="border rounded-lg p-3">
-          <h3 className="text-xs text-gray-500">Description</h3>
-          {isEditing ? (
-            <textarea
-              className="w-full border rounded p-1"
-              value={editForm.description || ""}
-              onChange={(e) =>
-                setEditForm({ ...editForm, description: e.target.value })
-              }
-            />
-          ) : (
-            <p className="font-medium">{selectedTicket.description}</p>
-          )}
-        </div>
-
-        {/* Rate */}
-        <div className="border rounded-lg p-3">
-          <h3 className="text-xs text-gray-500">Rate</h3>
-          {isEditing ? (
-       <input
-       type="text"
-       className={`w-full border rounded p-1 ${
-         isBayan ? "bg-gray-100 text-gray-400 cursor-not-allowed" : ""
-       }`}
-       value={isBayan ? "*****" : editForm.rate || ""}
-       onChange={(e) => {
-         if (isBayan) return;
-         setEditForm({ ...editForm, rate: e.target.value });
-       }}
-       disabled={isBayan}
-       readOnly={isBayan}
-     />
-          ) : (
-            <p className="font-medium">
-            {isBayan
-              ? "*****"
-              : selectedTicket.rate
-              ? `${selectedTicket.rate.toLocaleString()} ${selectedTicket.currency || ""}`
-              : "—"}
-          </p>
-          )}
-        </div>
-
-        {/* Done At */}
-        {selectedTicket.status === "done" && (
-          <div className="border rounded-lg p-3 col-span-2">
-            <h3 className="text-xs text-gray-500">Done At</h3>
-            <p className="font-medium text-green-700">
-              {selectedTicket.doneAt
-                ? new Date(selectedTicket.doneAt).toLocaleString()
-                : "—"}
-            </p>
-          </div>
-        )}
-      </div>
-
-    {/* Paid Section */}
-<div className="border rounded-lg p-3">
-  <h3 className="text-xs text-gray-500 mb-2">Paid</h3>
-  {currentUser?.role === "admin" ? (
-    <div className="flex gap-3">
-      {/* ✅ زر Yes */}
-      <button
-        onClick={async () => {
-          const res = await fetch(`/api/tickets/${selectedTicket._id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ paid: "yes" }),
-          });
-          if (res.ok) {
-            const updated = await res.json();
-            setSelectedTicket(updated);
-            setTickets((prev) =>
-              prev.map((t) => (t._id === updated._id ? updated : t))
-            );
-          }
-        }}
-        className={`px-4 py-2 rounded-lg font-medium transition ${
-          selectedTicket.paid === "yes"
-            ? "bg-green-600 text-white"
-            : "bg-gray-200 text-gray-800 hover:bg-gray-300"
-        }`}
-      >
-        Yes
-      </button>
-
-      {/* 🔴 زر No — يتعطل بعد ما تصير Yes */}
-      <button
-        disabled={selectedTicket.paid === "yes"} // ⛔ يمنع الرجوع بعد Yes
-        onClick={async () => {
-          const res = await fetch(`/api/tickets/${selectedTicket._id}`, {
-            method: "PATCH",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ paid: "no" }),
-          });
-          if (res.ok) {
-            const updated = await res.json();
-            setSelectedTicket(updated);
-            setTickets((prev) =>
-              prev.map((t) => (t._id === updated._id ? updated : t))
-            );
-          }
-        }}
-        className={`px-4 py-2 rounded-lg font-medium transition ${
-          selectedTicket.paid === "no"
-            ? "bg-red-600 text-white"
-            : selectedTicket.paid === "yes"
-            ? "bg-gray-300 text-gray-500 cursor-not-allowed" // 🔒 شكل معطل
-            : "bg-gray-200 text-gray-800 hover:bg-gray-300"
-        }`}
-      >
-        No
-      </button>
-    </div>
-  ) : (
-    <p className="font-medium">
-      {selectedTicket.paid === "yes" ? (
-        <span className="px-2 py-1 text-xs rounded-full bg-green-100 text-green-700">
-          Yes
-        </span>
-      ) : (
-        <span className="px-2 py-1 text-xs rounded-full bg-red-100 text-red-700">
-          No
-        </span>
-      )}
-    </p>
-  )}
-</div>
-
-      {/* Footer Buttons */}
-      <div className="flex justify-end gap-2 px-6 py-3 border-t bg-gray-50">
-        {isEditing ? (
-          <>
-            <button
-              onClick={async () => {
-                const res = await fetch(`/api/tickets/${selectedTicket._id}`, {
-                  method: "PATCH",
-                  headers: { "Content-Type": "application/json" },
-                  body: JSON.stringify({
-                    ...editForm,
-                    assignedTo: editForm.assignedTo || null,
-                    rate: isBayan ? selectedTicket.rate ?? null : editForm.rate,
-                  }),
-                });
-                if (res.ok) {
-                  const updated = await res.json();
-                  setSelectedTicket(updated);
-                  setTickets((prev) =>
-                    prev.map((t) => (t._id === updated._id ? updated : t))
-                  );
-                  setIsEditing(false); // ✅ نرجع عرض
-                }
-              }}
-              className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-            >
-              Save
-            </button>
-            <button
-              onClick={() => setIsEditing(false)}
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
-            >
-              Cancel
-            </button>
-          </>
-        ) : (
-          <>
-            {selectedTicket.status !== "done" &&
-              canMarkDone(currentUser, selectedTicket) && (
-                <button
-                  onClick={() => {
-                    markAsDone(selectedTicket._id);
-                    setSelectedTicket(null);
-                  }}
-                  className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700"
-                >
-                  Mark as Done
-                </button>
-              )}
-           {currentUser?.role === "admin" && (
-  <button
-    onClick={() => {
-      setEditForm({
-        title: selectedTicket.title || "",
-        description: selectedTicket.description || "",
-        assignedTo: selectedTicket.assignedTo || "",
-        priority: selectedTicket.priority || "medium",
-        dueDate: selectedTicket.dueDate
-          ? selectedTicket.dueDate.slice(0, 10)
-          : "",
-        company: selectedTicket.company || "",
-        rate: selectedTicket.rate ? selectedTicket.rate.toString() : "",
-        currency: selectedTicket.currency || "IQD",
-      });
-      setIsEditing(true);
-    }}
-    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
-  >
-    Edit
-  </button>
-)}
-            <button
-              onClick={() => {
-                setIsEditing(false); // ✅ إذا كان بوضع Edit نرجع عادي
-                setSelectedTicket(null);
-              }}
-              className="px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
-            >
-              Close
-            </button>
-          </>
-        )}
-      </div>
-    </motion.div>
-  </div>
-)}
     </div>
   );
 }
