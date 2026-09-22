@@ -433,6 +433,7 @@ export default function CreateTicketPage() {
                         ticket={ticket}
                         index={index}
                         hideRate={isBayan}
+                        hidePaid={isBayan}
                         canDelete={canDeleteTicket(currentUser)}
                         onClick={() => setSelectedTicket(ticket)}
                         onDelete={deleteTicket}
@@ -657,6 +658,7 @@ export default function CreateTicketPage() {
                 </div>
               )}
 
+              {!isBayan && (
               <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50">
                 <h3 className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-2">
                   Paid
@@ -709,6 +711,7 @@ export default function CreateTicketPage() {
                   </p>
                 )}
               </div>
+              )}
             </div>
 
             <div className="flex justify-end gap-2 px-6 py-4 border-t border-slate-200 bg-slate-50">
@@ -725,6 +728,9 @@ export default function CreateTicketPage() {
                           rate: isBayan
                             ? selectedTicket.rate ?? null
                             : editForm.rate,
+                          paid: isBayan
+                            ? selectedTicket.paid || "no"
+                            : editForm.paid,
                         }),
                       });
                       if (res.ok) {

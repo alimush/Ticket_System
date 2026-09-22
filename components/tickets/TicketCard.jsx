@@ -16,6 +16,7 @@ export default function TicketCard({
   canDelete,
   index = 0,
   hideRate = false,
+  hidePaid = false,
 }) {
   const isDone = ticket.status === "done";
   const dueLabel = ticket.dueDate
@@ -61,7 +62,7 @@ export default function TicketCard({
 
       <div className="flex flex-wrap items-center gap-2 mb-3 pr-6">
         <PriorityBadge priority={ticket.priority} />
-        <PaidBadge paid={ticket.paid} />
+        {!hidePaid && <PaidBadge paid={ticket.paid} />}
       </div>
 
       <h3

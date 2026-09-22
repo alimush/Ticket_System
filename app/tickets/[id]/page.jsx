@@ -107,6 +107,9 @@ export default function TicketDetailsPage() {
           currency: isBayanUser(currentUser)
             ? ticket.currency || "IQD"
             : editForm.currency,
+          paid: isBayanUser(currentUser)
+            ? ticket.paid || "no"
+            : editForm.paid,
         }),
       });
 
@@ -250,6 +253,7 @@ export default function TicketDetailsPage() {
                 Status: {ticket.status || "open"}
               </span>
 
+              {!isBayanUser(currentUser) && (
               <span
                 className={`px-3 py-1 rounded-full text-sm font-semibold ${
                   ticket.paid === "yes"
@@ -259,6 +263,7 @@ export default function TicketDetailsPage() {
               >
                 Paid: {ticket.paid === "yes" ? "Yes" : "No"}
               </span>
+              )}
 
               <span
                 className={`px-3 py-1 rounded-full text-sm font-semibold ${
@@ -440,6 +445,7 @@ export default function TicketDetailsPage() {
             </div>
 
             {/* Paid Section */}
+            {!isBayanUser(currentUser) && (
             <div className="border rounded-xl p-5 bg-gray-50">
               <h3 className="text-sm font-semibold text-gray-500 mb-3">Paid</h3>
 
@@ -484,6 +490,7 @@ export default function TicketDetailsPage() {
                 </p>
               )}
             </div>
+            )}
 
             {/* Footer Buttons */}
             <div className="flex flex-wrap justify-end gap-2 pt-2">

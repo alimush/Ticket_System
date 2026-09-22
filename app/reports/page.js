@@ -206,9 +206,9 @@ export default function ReportPage() {
             "Due Date": t.dueDate ? String(t.dueDate).slice(0, 10) : "—",
             "Done At": t.doneAt ? new Date(t.doneAt).toLocaleString() : "—",
             Status: t.status || "",
-            Paid: t.paid || "",
           };
           if (!isBayan) {
+            row.Paid = t.paid || "";
             row.Rate = t.rate
               ? `${Number(t.rate || 0).toLocaleString()} ${t.currency || ""}`
               : "—";
@@ -289,7 +289,7 @@ export default function ReportPage() {
         priority: editForm.priority,
         dueDate: editForm.dueDate ? new Date(editForm.dueDate).toISOString() : null,
         status: editForm.status,
-        paid: editForm.paid,
+        paid: isBayan ? selectedTicket.paid || "no" : editForm.paid,
         rate: isBayan
         ? selectedTicket.rate ?? null
         : editForm.rate === ""
@@ -428,16 +428,18 @@ export default function ReportPage() {
             onChange={setFilterStatus}
             placeholder="All statuses"
           />
-          <FilterSelect
-            label="Paid"
-            options={[
-              { value: "yes", label: "Yes" },
-              { value: "no", label: "No" },
-            ]}
-            value={filterPaid}
-            onChange={setFilterPaid}
-            placeholder="All"
-          />
+          {!isBayan && (
+            <FilterSelect
+              label="Paid"
+              options={[
+                { value: "yes", label: "Yes" },
+                { value: "no", label: "No" },
+              ]}
+              value={filterPaid}
+              onChange={setFilterPaid}
+              placeholder="All"
+            />
+          )}
           <div>
             <label className="block text-xs font-medium text-slate-500 mb-1.5">
               Due from
@@ -515,7 +517,9 @@ export default function ReportPage() {
                   <th className="px-4 py-3.5 text-left font-semibold">Due</th>
                   <th className="px-4 py-3.5 text-left font-semibold">Done At</th>
                   <th className="px-4 py-3.5 text-left font-semibold">Status</th>
-                  <th className="px-4 py-3.5 text-left font-semibold">Paid</th>
+                  {!isBayan && (
+                    <th className="px-4 py-3.5 text-left font-semibold">Paid</th>
+                  )}
                   {!isBayan && (
                     <th className="px-4 py-3.5 text-right font-semibold">Rate</th>
                   )}
@@ -828,29 +832,31 @@ export default function ReportPage() {
                     </div>
                   )}
                 </DetailField>
-                <DetailField label="Paid">
-                  {isEditing ? (
-                    <Select
-                      options={[
-                        { value: "yes", label: "Yes" },
-                        { value: "no", label: "No" },
-                      ]}
-                      value={{
-                        value: editForm.paid,
-                        label: editForm.paid === "yes" ? "Yes" : "No",
-                      }}
-                      onChange={(v) =>
-                        setEditForm((p) => ({ ...p, paid: v?.value || "no" }))
-                      }
-                      styles={selectStyles}
-                      className="mt-1 text-sm"
-                    />
-                  ) : (
-                    <div className="mt-1">
-                      <PaidBadge paid={selectedTicket.paid} />
-                    </div>
-                  )}
-                </DetailField>
+                {!isBayan && (
+                  <DetailField label="Paid">
+                    {isEditing ? (
+                      <Select
+                        options={[
+                          { value: "yes", label: "Yes" },
+                          { value: "no", label: "No" },
+                        ]}
+                        value={{
+                          value: editForm.paid,
+                          label: editForm.paid === "yes" ? "Yes" : "No",
+                        }}
+                        onChange={(v) =>
+                          setEditForm((p) => ({ ...p, paid: v?.value || "no" }))
+                        }
+                        styles={selectStyles}
+                        className="mt-1 text-sm"
+                      />
+                    ) : (
+                      <div className="mt-1">
+                        <PaidBadge paid={selectedTicket.paid} />
+                      </div>
+                    )}
+                  </DetailField>
+                )}
               </div>
 
               {!isBayan && (
@@ -1110,9 +1116,11 @@ function ReportTableRow({
       <td className="px-4 py-3">
         <StatusBadge status={ticket.status} />
       </td>
-      <td className="px-4 py-3">
-        <PaidBadge paid={ticket.paid} />
-      </td>
+      {!isBayan && (
+        <td className="px-4 py-3">
+          <PaidBadge paid={ticket.paid} />
+        </td>
+      )}
       {!isBayan && (
         <td className="px-4 py-3 text-right font-semibold text-slate-800 whitespace-nowrap">
           {ticket.rate
