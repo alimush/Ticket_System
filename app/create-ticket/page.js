@@ -621,33 +621,29 @@ export default function CreateTicketPage() {
                 )}
               </div>
 
-              <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50">
-                <h3 className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-1">
-                  Rate
-                </h3>
-                {isEditing ? (
-                  <input
-                    type="text"
-                    className={`w-full border border-slate-200 rounded-lg p-1.5 text-sm bg-white ${
-                      isBayan ? "bg-slate-100 text-slate-400 cursor-not-allowed" : ""
-                    }`}
-                    value={isBayan ? "*****" : editForm.rate || ""}
-                    onChange={(e) => {
-                      if (!isBayan) setEditForm({ ...editForm, rate: e.target.value });
-                    }}
-                    disabled={isBayan}
-                    readOnly={isBayan}
-                  />
-                ) : (
-                  <p className="font-medium text-slate-800">
-                    {isBayan
-                      ? "*****"
-                      : selectedTicket.rate
-                      ? `${selectedTicket.rate.toLocaleString()} ${selectedTicket.currency || ""}`
-                      : "—"}
-                  </p>
-                )}
-              </div>
+              {!isBayan && (
+                <div className="rounded-lg border border-slate-200 p-3 bg-slate-50/50">
+                  <h3 className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-1">
+                    Rate
+                  </h3>
+                  {isEditing ? (
+                    <input
+                      type="text"
+                      className="w-full border border-slate-200 rounded-lg p-1.5 text-sm bg-white"
+                      value={editForm.rate || ""}
+                      onChange={(e) =>
+                        setEditForm({ ...editForm, rate: e.target.value })
+                      }
+                    />
+                  ) : (
+                    <p className="font-medium text-slate-800">
+                      {selectedTicket.rate
+                        ? `${selectedTicket.rate.toLocaleString()} ${selectedTicket.currency || ""}`
+                        : "—"}
+                    </p>
+                  )}
+                </div>
+              )}
 
               {selectedTicket.status === "done" && selectedTicket.doneAt && (
                 <div className="rounded-lg border border-emerald-200 p-3 bg-emerald-50">

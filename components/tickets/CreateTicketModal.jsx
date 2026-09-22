@@ -196,53 +196,45 @@ export default function CreateTicketModal({
             </div>
           </Section>
 
-          <Section icon={<FaMoneyBillWave />} title="Payment">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div>
-                <FieldLabel>Rate</FieldLabel>
-                <input
-                  type="text"
-                  className={`${inputClass} ${
-                    isBayan ? "bg-slate-100 text-slate-400 cursor-not-allowed" : ""
-                  }`}
-                  value={isBayan ? "*****" : rate}
-                  onChange={(e) => {
-                    if (isBayan) return;
-                    const raw = e.target.value.replace(/,/g, "");
-                    if (raw === "") {
-                      setRate("");
-                      return;
-                    }
-                    if (raw === "-") {
-                      setRate("-");
-                      return;
-                    }
-                    if (isNaN(raw)) return;
-                    setRate(Number(raw).toLocaleString());
-                  }}
-                  placeholder={isBayan ? "No access" : "Enter amount..."}
-                  disabled={isBayan}
-                  readOnly={isBayan}
-                />
+          {!isBayan && (
+            <Section icon={<FaMoneyBillWave />} title="Payment">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <FieldLabel>Rate</FieldLabel>
+                  <input
+                    type="text"
+                    className={inputClass}
+                    value={rate}
+                    onChange={(e) => {
+                      const raw = e.target.value.replace(/,/g, "");
+                      if (raw === "") {
+                        setRate("");
+                        return;
+                      }
+                      if (raw === "-") {
+                        setRate("-");
+                        return;
+                      }
+                      if (isNaN(raw)) return;
+                      setRate(Number(raw).toLocaleString());
+                    }}
+                    placeholder="Enter amount..."
+                  />
+                </div>
+                <div>
+                  <FieldLabel>Currency</FieldLabel>
+                  <select
+                    className={inputClass}
+                    value={currency}
+                    onChange={(e) => setCurrency(e.target.value)}
+                  >
+                    <option value="IQD">IQD</option>
+                    <option value="USD">USD</option>
+                  </select>
+                </div>
               </div>
-              <div>
-                <FieldLabel>Currency</FieldLabel>
-                <select
-                  className={`${inputClass} ${
-                    isBayan ? "bg-slate-100 text-slate-400 cursor-not-allowed" : ""
-                  }`}
-                  value={currency}
-                  onChange={(e) => {
-                    if (!isBayan) setCurrency(e.target.value);
-                  }}
-                  disabled={isBayan}
-                >
-                  <option value="IQD">IQD</option>
-                  <option value="USD">USD</option>
-                </select>
-              </div>
-            </div>
-          </Section>
+            </Section>
+          )}
         </form>
 
         {/* Footer */}

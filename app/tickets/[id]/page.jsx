@@ -7,6 +7,7 @@ import Select from "react-select";
 import {
   getCurrentUser,
   canMarkDone,
+  isBayanUser,
 } from "@/lib/permissions";
 
 export default function TicketDetailsPage() {
@@ -330,6 +331,7 @@ export default function TicketDetailsPage() {
               </div>
 
               {/* Rate */}
+              {!isBayanUser(currentUser) && (
               <div className="border rounded-xl p-4 bg-white shadow-sm">
                 <p className="text-xs text-gray-500 mb-1">Rate</p>
                 {isEditing ? (
@@ -361,6 +363,7 @@ export default function TicketDetailsPage() {
                   </p>
                 )}
               </div>
+              )}
 
               {/* Due Date */}
               <div className="border rounded-xl p-4 bg-white shadow-sm">

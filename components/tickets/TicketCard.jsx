@@ -23,11 +23,9 @@ export default function TicketCard({
     : null;
 
   const rateLabel =
-    ticket.rate != null && ticket.rate !== ""
-      ? hideRate
-        ? "*****"
-        : `${Number(ticket.rate).toLocaleString()} ${ticket.currency || "IQD"}`
-      : null;
+    hideRate || ticket.rate == null || ticket.rate === ""
+      ? null
+      : `${Number(ticket.rate).toLocaleString()} ${ticket.currency || "IQD"}`;
 
   return (
     <motion.div
