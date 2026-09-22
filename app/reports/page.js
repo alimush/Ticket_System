@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
 const Select = dynamic(() => import("react-select"), { ssr: false });
 import * as XLSX from "xlsx";
-import { getCurrentUser, isAdmin } from "@/lib/permissions";
+import { getCurrentUser, isAdmin, canEditTicket as canEditTicketPerm } from "@/lib/permissions";
 import { AiOutlineDelete } from "react-icons/ai";
 import { FaFileExcel, FaTimes, FaEye, FaCheck, FaMoneyBillWave } from "react-icons/fa";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -62,9 +62,7 @@ export default function ReportPage() {
   // =========================
   const canEditTicket = (ticket) => {
     if (!currentUser || !ticket) return false;
-    if (isAdmin(currentUser)) return true;
-    const userName = currentUser?.name || currentUser?.username || "";
-    return ticket.assignedTo === userName;
+    return canEditTicketPerm(currentUser, ticket);
   };
 
   // 🟢 fetch tickets

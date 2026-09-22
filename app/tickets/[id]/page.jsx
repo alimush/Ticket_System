@@ -8,6 +8,7 @@ import {
   getCurrentUser,
   canMarkDone,
   isBayanUser,
+  canEditTicket,
 } from "@/lib/permissions";
 
 export default function TicketDetailsPage() {
@@ -98,7 +99,14 @@ export default function TicketDetailsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...editForm,
-          rate: editForm.rate ? Number(String(editForm.rate).replace(/,/g, "")) : null,
+          rate: isBayanUser(currentUser)
+            ? ticket.rate ?? null
+            : editForm.rate
+            ? Number(String(editForm.rate).replace(/,/g, ""))
+            : null,
+          currency: isBayanUser(currentUser)
+            ? ticket.currency || "IQD"
+            : editForm.currency,
         }),
       });
 
@@ -506,7 +514,7 @@ export default function TicketDetailsPage() {
                       </button>
                     )}
 
-                  {currentUser?.role === "admin" && (
+                  {canEditTicket(currentUser, ticket) && (
                     <button
                       onClick={startEdit}
                       className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"

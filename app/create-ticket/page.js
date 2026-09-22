@@ -8,6 +8,7 @@ import {
   canDeleteTicket,
   canMarkDone,
   canViewTicket,
+  canEditTicket,
 } from "@/lib/permissions";
 import TicketCard from "@/components/tickets/TicketCard";
 import CreateTicketModal from "@/components/tickets/CreateTicketModal";
@@ -760,7 +761,7 @@ export default function CreateTicketPage() {
                         Mark as Done
                       </button>
                     )}
-                  {currentUser?.role === "admin" && (
+                  {canEditTicket(currentUser, selectedTicket) && (
                     <button
                       onClick={() => {
                         setEditForm({
