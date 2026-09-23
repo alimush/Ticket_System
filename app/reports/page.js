@@ -4,7 +4,7 @@ import { motion } from "framer-motion";
 import dynamic from "next/dynamic";
 const Select = dynamic(() => import("react-select"), { ssr: false });
 import * as XLSX from "xlsx";
-import { getCurrentUser, isAdmin, canEditTicket as canEditTicketPerm } from "@/lib/permissions";
+import { getCurrentUser, isAdmin, canEditTicket as canEditTicketPerm, canEditRate, canEditPaid } from "@/lib/permissions";
 import { AiOutlineDelete } from "react-icons/ai";
 import { FaFileExcel, FaTimes, FaEye, FaCheck, FaMoneyBillWave } from "react-icons/fa";
 import LoadingSpinner from "@/components/LoadingSpinner";
@@ -289,13 +289,17 @@ export default function ReportPage() {
         priority: editForm.priority,
         dueDate: editForm.dueDate ? new Date(editForm.dueDate).toISOString() : null,
         status: editForm.status,
-        paid: isBayan ? selectedTicket.paid || "no" : editForm.paid,
-        rate: isBayan
-        ? selectedTicket.rate ?? null
-        : editForm.rate === ""
-        ? null
-        : Number(editForm.rate),
-      currency: isBayan ? selectedTicket.currency || "IQD" : editForm.currency,
+        paid: canEditPaid(currentUser)
+          ? editForm.paid
+          : selectedTicket.paid || "no",
+        rate: canEditRate(currentUser)
+          ? editForm.rate === ""
+            ? null
+            : Number(editForm.rate)
+          : selectedTicket.rate ?? null,
+        currency: canEditRate(currentUser)
+          ? editForm.currency
+          : selectedTicket.currency || "IQD",
       };
 
       const res = await fetch(`/api/tickets/${selectedTicket._id}`, {
@@ -834,7 +838,7 @@ export default function ReportPage() {
                 </DetailField>
                 {!isBayan && (
                   <DetailField label="Paid">
-                    {isEditing ? (
+                    {isEditing && canEditPaid(currentUser) ? (
                       <Select
                         options={[
                           { value: "yes", label: "Yes" },
@@ -861,7 +865,7 @@ export default function ReportPage() {
 
               {!isBayan && (
                 <DetailField label="Rate" full>
-                  {isEditing ? (
+                  {isEditing && canEditRate(currentUser) ? (
                     <div className="mt-1 flex gap-2">
                       <input
                         type="text"

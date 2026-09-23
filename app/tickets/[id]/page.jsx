@@ -9,6 +9,8 @@ import {
   canMarkDone,
   isBayanUser,
   canEditTicket,
+  canEditRate,
+  canEditPaid,
 } from "@/lib/permissions";
 
 export default function TicketDetailsPage() {
@@ -99,17 +101,17 @@ export default function TicketDetailsPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           ...editForm,
-          rate: isBayanUser(currentUser)
-            ? ticket.rate ?? null
-            : editForm.rate
-            ? Number(String(editForm.rate).replace(/,/g, ""))
-            : null,
-          currency: isBayanUser(currentUser)
-            ? ticket.currency || "IQD"
-            : editForm.currency,
-          paid: isBayanUser(currentUser)
-            ? ticket.paid || "no"
-            : editForm.paid,
+          rate: canEditRate(currentUser)
+            ? editForm.rate
+              ? Number(String(editForm.rate).replace(/,/g, ""))
+              : null
+            : ticket.rate ?? null,
+          currency: canEditRate(currentUser)
+            ? editForm.currency
+            : ticket.currency || "IQD",
+          paid: canEditPaid(currentUser)
+            ? editForm.paid
+            : ticket.paid || "no",
         }),
       });
 
@@ -347,7 +349,7 @@ export default function TicketDetailsPage() {
               {!isBayanUser(currentUser) && (
               <div className="border rounded-xl p-4 bg-white shadow-sm">
                 <p className="text-xs text-gray-500 mb-1">Rate</p>
-                {isEditing ? (
+                {isEditing && canEditRate(currentUser) ? (
                   <div className="space-y-2">
                     <input
                       type="text"
@@ -449,7 +451,7 @@ export default function TicketDetailsPage() {
             <div className="border rounded-xl p-5 bg-gray-50">
               <h3 className="text-sm font-semibold text-gray-500 mb-3">Paid</h3>
 
-              {currentUser?.role === "admin" ? (
+              {canEditPaid(currentUser) ? (
                 <div className="flex gap-3">
                   <button
                     onClick={() => updatePaid("yes")}

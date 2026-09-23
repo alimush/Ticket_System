@@ -9,6 +9,8 @@ import {
   canMarkDone,
   canViewTicket,
   canEditTicket,
+  canEditRate,
+  canEditPaid,
 } from "@/lib/permissions";
 import TicketCard from "@/components/tickets/TicketCard";
 import CreateTicketModal from "@/components/tickets/CreateTicketModal";
@@ -628,7 +630,7 @@ export default function CreateTicketPage() {
                   <h3 className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-1">
                     Rate
                   </h3>
-                  {isEditing ? (
+                  {isEditing && canEditRate(currentUser) ? (
                     <input
                       type="text"
                       className="w-full border border-slate-200 rounded-lg p-1.5 text-sm bg-white"
@@ -663,7 +665,7 @@ export default function CreateTicketPage() {
                 <h3 className="text-[11px] font-medium text-slate-400 uppercase tracking-wide mb-2">
                   Paid
                 </h3>
-                {currentUser?.role === "admin" ? (
+                {canEditPaid(currentUser) ? (
                   <div className="flex gap-2">
                     {["yes", "no"].map((val) => (
                       <button
@@ -725,12 +727,15 @@ export default function CreateTicketPage() {
                         body: JSON.stringify({
                           ...editForm,
                           assignedTo: editForm.assignedTo || null,
-                          rate: isBayan
-                            ? selectedTicket.rate ?? null
-                            : editForm.rate,
-                          paid: isBayan
-                            ? selectedTicket.paid || "no"
-                            : editForm.paid,
+                          rate: canEditRate(currentUser)
+                            ? editForm.rate
+                            : selectedTicket.rate ?? null,
+                          currency: canEditRate(currentUser)
+                            ? editForm.currency || selectedTicket.currency || "IQD"
+                            : selectedTicket.currency || "IQD",
+                          paid: canEditPaid(currentUser)
+                            ? editForm.paid
+                            : selectedTicket.paid || "no",
                         }),
                       });
                       if (res.ok) {
